@@ -79,7 +79,7 @@ def init_db():
         user_id TEXT UNIQUE,
         nickname TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        graduation_year INTEGER,
+        current_year INTEGER,
         required_credits REAL DEFAULT 124.0,
         settings_json TEXT
     )''')
@@ -125,7 +125,7 @@ def create_default_user():
                 
             password_hash = generate_password_hash(admin_password)
             c.execute('''
-                INSERT INTO users (email, name, password_hash, graduation_year, required_credits, user_id, nickname)
+                INSERT INTO users (email, name, password_hash, current_year, required_credits, user_id, nickname)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', ("admin@example.com", "管理者", password_hash, 2025, 124.0, "admin", "管理者"))
             conn.commit()
@@ -863,7 +863,7 @@ class RegistrationForm(FlaskForm):
         DataRequired(), 
         EqualTo('password', message='パスワードが一致しません')
     ])
-    graduation_year = IntegerField('学年', validators=[DataRequired(), NumberRange(min=1, max=6, message='1〜6の間で入力してください')])
+    current_year = IntegerField('学年', validators=[DataRequired(), NumberRange(min=1, max=6, message='1〜6の間で入力してください')])
     submit = SubmitField('登録')
     
     def validate_user_id(self, user_id):
@@ -914,14 +914,14 @@ class DeleteAccountForm(FlaskForm):
 
 # Flask-Loginのユーザーモデル
 class User(UserMixin):
-    def __init__(self, id, email, name, password_hash=None, graduation_year=None, required_credits=124.0, settings_json=None, user_id=None, nickname=None):
+    def __init__(self, id, email, name, password_hash=None, current_year=None, required_credits=124.0, settings_json=None, user_id=None, nickname=None):
         self.id = id
         self.email = email
         self.name = name
         self.user_id = user_id
         self.nickname = nickname
         self.password_hash = password_hash
-        self.graduation_year = graduation_year
+        self.current_year = current_year
         self.required_credits = required_credits
         self.settings = json.loads(settings_json) if settings_json else {}
         
@@ -946,7 +946,7 @@ class User(UserMixin):
                     user_id=user_data['user_id'] if 'user_id' in user_data.keys() else None,
                     nickname=user_data['nickname'] if 'nickname' in user_data.keys() else None,
                     password_hash=user_data['password_hash'],
-                    graduation_year=user_data['graduation_year'],
+                    current_year=user_data['current_year'],
                     required_credits=user_data['required_credits'],
                     settings_json=user_data['settings_json']
                 )
@@ -972,7 +972,7 @@ class User(UserMixin):
                     user_id=user_data['user_id'] if 'user_id' in user_data.keys() else None,
                     nickname=user_data['nickname'] if 'nickname' in user_data.keys() else None,
                     password_hash=user_data['password_hash'],
-                    graduation_year=user_data['graduation_year'],
+                    current_year=user_data['current_year'],
                     required_credits=user_data['required_credits'],
                     settings_json=user_data['settings_json']
                 )
@@ -998,7 +998,7 @@ class User(UserMixin):
                     user_id=user_data['user_id'] if 'user_id' in user_data.keys() else None,
                     nickname=user_data['nickname'] if 'nickname' in user_data.keys() else None,
                     password_hash=user_data['password_hash'],
-                    graduation_year=user_data['graduation_year'],
+                    current_year=user_data['current_year'],
                     required_credits=user_data['required_credits'],
                     settings_json=user_data['settings_json']
                 )
@@ -1041,9 +1041,9 @@ def register():
             conn = sqlite3.connect(DB_FILE)
             c = conn.cursor()
             c.execute('''
-                INSERT INTO users (email, name, password_hash, graduation_year, user_id, nickname)
+                INSERT INTO users (email, name, password_hash, current_year, user_id, nickname)
                 VALUES (?, ?, ?, ?, ?, ?)
-            ''', ('', form.nickname.data, password_hash, form.graduation_year.data, form.user_id.data, form.nickname.data))
+            ''', ('', form.nickname.data, password_hash, form.current_year.data, form.user_id.data, form.nickname.data))
             conn.commit()
             user_id = c.lastrowid
             conn.close()
@@ -1073,7 +1073,7 @@ def profile():
         profile_form.user_id.data = current_user.user_id
         profile_form.nickname.data = current_user.nickname or current_user.name
         profile_form.email.data = current_user.email or ''
-        profile_form.grade.data = current_user.graduation_year
+        profile_form.grade.data = current_user.current_year
     
     # パスワード変更フォームの初期化
     password_form = ChangePasswordForm()
@@ -1088,7 +1088,7 @@ def profile():
             c = conn.cursor()
             c.execute('''
                 UPDATE users
-                SET user_id = ?, nickname = ?, email = ?, graduation_year = ?
+                SET user_id = ?, nickname = ?, email = ?, current_year = ?
                 WHERE id = ?
             ''', (
                 profile_form.user_id.data,
@@ -1104,7 +1104,7 @@ def profile():
             current_user.user_id = profile_form.user_id.data
             current_user.nickname = profile_form.nickname.data
             current_user.email = profile_form.email.data
-            current_user.graduation_year = profile_form.grade.data
+            current_user.current_year = profile_form.grade.data
             
             flash('プロフィールが更新されました', 'success')
             return redirect(url_for('profile'))
@@ -1298,9 +1298,9 @@ def get_ranking():
         
         # 学年フィルタに応じてクエリを変更
         if grade_filter == 'all':
-            c.execute('SELECT id, nickname, graduation_year FROM users WHERE nickname IS NOT NULL')
+            c.execute('SELECT id, nickname, current_year FROM users WHERE nickname IS NOT NULL')
         else:
-            c.execute('SELECT id, nickname, graduation_year FROM users WHERE nickname IS NOT NULL AND graduation_year = ?', (int(grade_filter),))
+            c.execute('SELECT id, nickname, current_year FROM users WHERE nickname IS NOT NULL AND current_year = ?', (int(grade_filter),))
         
         users = c.fetchall()
         conn.close()
@@ -1315,7 +1315,7 @@ def get_ranking():
                 ranking_data.append({
                     'user_id': user['id'],
                     'nickname': user['nickname'],
-                    'graduation_year': user['graduation_year'],
+                    'current_year': user['current_year'],
                     'gpa': gpa,
                     'gps': gps,
                     'total_credits': total_credits,
@@ -1380,7 +1380,7 @@ def get_distribution_stats():
         if grade_filter == 'all':
             c.execute('SELECT id FROM users WHERE nickname IS NOT NULL')
         else:
-            c.execute('SELECT id FROM users WHERE nickname IS NOT NULL AND graduation_year = ?', (int(grade_filter),))
+            c.execute('SELECT id FROM users WHERE nickname IS NOT NULL AND current_year = ?', (int(grade_filter),))
         
         users = c.fetchall()
         conn.close()
@@ -1488,22 +1488,22 @@ def get_available_grades():
         
         # データが存在するユーザーの学年を取得
         c.execute('''
-            SELECT DISTINCT u.graduation_year 
+            SELECT DISTINCT u.current_year 
             FROM users u 
             WHERE u.nickname IS NOT NULL 
-            AND u.graduation_year IS NOT NULL 
+            AND u.current_year IS NOT NULL 
             AND EXISTS (
                 SELECT 1 FROM grades g 
                 WHERE g.user_id = u.id 
                 AND g.grade IS NOT NULL 
                 AND g.grade != ''
             )
-            ORDER BY u.graduation_year
+            ORDER BY u.current_year
         ''')
         grades = c.fetchall()
         conn.close()
         
-        available_grades = [row['graduation_year'] for row in grades if row['graduation_year'] is not None]
+        available_grades = [row['current_year'] for row in grades if row['current_year'] is not None]
         
         return jsonify({
             'status': 'success',
