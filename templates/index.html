@@ -1,0 +1,871 @@
+{% extends "base.html" %} {% block title %}ホーム | 成績管理アプリ{% endblock %}
+{% block additional_styles %}
+<link
+  rel="stylesheet"
+  href="{{ url_for('static', filename='pagination_styles.css') }}"
+/>
+<link
+  rel="stylesheet"
+  href="{{ url_for('static', filename='grade_cards.css') }}"
+/>
+<style>
+  /* 空状態表示のスタイル */
+  .empty-state {
+    margin: 30px 0;
+    padding: 30px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px dashed #dee2e6;
+  }
+  .empty-state-content {
+    max-width: 800px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .empty-state h3 {
+    color: #495057;
+    margin-bottom: 15px;
+  }
+  .empty-state ul {
+    display: inline-block;
+    text-align: left;
+    margin: 15px auto;
+  }
+  .empty-state li {
+    margin: 10px 0;
+    line-height: 1.5;
+  }
+
+  /* CAMPUSインポート説明のスタイル */
+  .campus-import-instructions {
+    margin-bottom: 20px;
+  }
+
+  .intro-text {
+    font-size: 16px;
+    margin-bottom: 20px;
+    color: #495057;
+  }
+
+  .step-container {
+    margin: 20px 0;
+  }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    padding: 16px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #007bff;
+  }
+
+  .step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background-color: #007bff;
+    color: white;
+    border-radius: 50%;
+    font-weight: bold;
+    font-size: 14px;
+    margin-right: 16px;
+    flex-shrink: 0;
+  }
+
+  .step-content {
+    flex: 1;
+  }
+
+  .step-content strong {
+    display: block;
+    margin-bottom: 6px;
+    color: #495057;
+    font-size: 15px;
+  }
+
+  .step-content p {
+    margin: 0;
+    color: #6c757d;
+    line-height: 1.4;
+  }
+
+  .browser-details {
+    margin-top: 8px;
+  }
+
+  .browser-details summary {
+    color: #007bff;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px 0;
+  }
+
+  .browser-details ul {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+  }
+
+  .browser-details li {
+    margin: 4px 0;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .browser-details code {
+    background-color: #e9ecef;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .security-note {
+    padding: 12px 16px;
+    background-color: #d1ecf1;
+    border: 1px solid #bee5eb;
+    border-radius: 6px;
+    color: #0c5460;
+    font-size: 14px;
+    text-align: center;
+    margin-top: 16px;
+  }
+
+  /* レスポンシブ対応 */
+  @media (max-width: 768px) {
+    .step {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .step-number {
+      align-self: flex-start;
+      margin-bottom: 8px;
+      margin-right: 0;
+    }
+
+    .step-content {
+      margin-left: 0;
+    }
+  }
+</style>
+{% endblock %} {% block content %}
+<header class="app-header">
+  <h1>成績管理アプリ</h1>
+
+  <div class="quick-stats">
+    <div class="stat-card">
+      <div class="stat-label">GPA</div>
+      <div class="stat-value" id="header-gpa">-.--</div>
+      <div class="stat-note">※F評価も含む</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">GPS</div>
+      <div class="stat-value" id="header-gps">0.0</div>
+      <div class="stat-note">単位×評価点の合計</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">総取得単位</div>
+      <div class="stat-value" id="header-credits">0</div>
+      <div class="stat-note">※F評価は除外</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">卒業までの残り単位</div>
+      <div class="stat-value" id="header-remaining">124</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">登録科目数</div>
+      <div class="stat-value" id="header-courses">0</div>
+    </div>
+  </div>
+</header>
+
+<form id="add-course-form">
+  <h2>科目追加 / 更新</h2>
+  <div>
+    <label for="course-year">年度:</label>
+    <input type="number" id="course-year" min="2000" max="2100" required />
+  </div>
+  <div>
+    <label for="course-semester">学期:</label>
+    <select id="course-semester" required>
+      <option value="">選択してください</option>
+      <option value="春学期">春学期</option>
+      <option value="秋学期">秋学期</option>
+    </select>
+  </div>
+  <div>
+    <label for="course-name">科目名:</label>
+    <input type="text" id="course-name" required />
+  </div>
+  <div>
+    <label for="course-credits">単位数:</label>
+    <input type="number" id="course-credits" min="0.5" step="0.5" required />
+  </div>
+  <div>
+    <label for="course-grade">評価:</label>
+    <select id="course-grade" required>
+      <option value="">選択してください</option>
+      <option value="A+">A+</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="C">C</option>
+      <option value="F">F (不可)</option>
+      <!-- 必要なら他の評価も追加 -->
+    </select>
+  </div>
+  <div>
+    <label for="course-category">カテゴリ:</label>
+    <select id="course-category" required>
+      <option value="">選択してください</option>
+      <!-- 専門科目 -->
+      <option value="基礎専門科目">基礎専門科目</option>
+      <option value="共通専門科目">共通専門科目</option>
+      <option value="固有専門科目（必修）">固有専門科目（必修）</option>
+      <option value="固有専門科目（選択）">固有専門科目（選択）</option>
+      <option value="グローバル・キャリア養成科目">
+        グローバル・キャリア養成科目
+      </option>
+      <!-- 外国語科目 -->
+      <option value="外国語">外国語</option>
+      <!-- 教養科目 -->
+      <option value="教養科目">教養科目</option>
+      <!-- その他 -->
+      <option value="未分類">未分類</option>
+    </select>
+  </div>
+  <div>
+    <label for="course-memo">メモ:</label>
+    <textarea
+      id="course-memo"
+      rows="3"
+      placeholder="科目に関するメモを入力してください"
+    ></textarea>
+  </div>
+  <button type="submit">追加</button>
+  <button type="button" id="cancel-edit-btn" style="display: none">
+    キャンセル
+  </button>
+</form>
+
+<div class="section-header">
+  <h2>科目リスト</h2>
+  <div class="section-actions">
+    <button id="campus-import-btn" class="action-button primary campus-btn">
+      <span>CAMPUSウェブから取込</span>
+    </button>
+    <button id="show-bulk-add-btn" class="action-button primary">
+      <span>複数科目をまとめて追加 +</span>
+    </button>
+    <button
+      id="reclassify-btn"
+      class="action-button secondary"
+      title="既存科目のカテゴリを共通専門科目に自動更新"
+    >
+      <span>🔄 カテゴリ再分類</span>
+    </button>
+  </div>
+</div>
+
+<!-- 科目がない場合のガイダンスメッセージ -->
+<div id="empty-course-message" class="empty-state" style="display: none">
+  <div class="empty-state-content">
+    <h3>科目がまだ登録されていません</h3>
+    <p>以下の方法で科目を追加できます：</p>
+    <ul>
+      <li>上部のフォームから個別に科目を追加</li>
+      <li>「CAMPUSウェブから取込」でCAMPUS成績データをインポート</li>
+      <li>「複数科目をまとめて追加」から複数科目を一括登録</li>
+    </ul>
+  </div>
+</div>
+
+<!-- フィルターとソートのUI -->
+<div class="filter-sort-container">
+  <div class="filter-section">
+    <h3>絞り込み</h3>
+    <div>
+      <label for="filter-name">科目名:</label>
+      <input
+        type="text"
+        id="filter-name"
+        placeholder="科目名で検索"
+        class="search-input"
+      />
+    </div>
+    <div>
+      <label for="filter-year">年度:</label>
+      <select id="filter-year">
+        <option value="">すべて</option>
+        <option value="未修得">年度不明（履修予定科目）</option>
+      </select>
+    </div>
+    <div>
+      <label for="filter-semester">学期:</label>
+      <select id="filter-semester">
+        <option value="">すべて</option>
+        <option value="春学期">春学期</option>
+        <option value="秋学期">秋学期</option>
+      </select>
+    </div>
+    <div>
+      <label for="filter-category">カテゴリ:</label>
+      <select id="filter-category">
+        <option value="">すべて</option>
+        <!-- 専門科目グループ -->
+        <optgroup label="専門科目">
+          <option value="基礎専門科目">基礎専門科目</option>
+          <option value="共通専門科目">共通専門科目</option>
+          <option value="固有専門科目（必修）">固有専門科目（必修）</option>
+          <option value="固有専門科目（選択）">固有専門科目（選択）</option>
+          <option value="グローバル・キャリア養成科目">
+            グローバル・キャリア養成科目
+          </option>
+        </optgroup>
+        <!-- 外国語科目 -->
+        <option value="外国語">外国語</option>
+        <!-- 教養科目 -->
+        <option value="教養科目">教養科目</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="sort-section">
+    <h3>並べ替え</h3>
+    <div>
+      <button id="sort-grade" class="sort-btn">評価順</button>
+      <button id="sort-credits" class="sort-btn">単位数順</button>
+      <button id="sort-year" class="sort-btn">年度順</button>
+    </div>
+  </div>
+</div>
+
+<div id="course-list-container">
+  <div class="table-actions">
+    <button id="select-all-btn" class="action-button small">すべて選択</button>
+    <button id="deselect-all-btn" class="action-button small">選択解除</button>
+    <button
+      id="delete-selected-btn"
+      class="action-button small delete-btn"
+      disabled
+    >
+      選択項目を削除
+    </button>
+    <!-- 表示件数セレクタ -->
+    <div class="pagination-controls">
+      <span>表示件数:</span>
+      <select id="page-size-selector">
+        <option value="10">10件</option>
+        <option value="20">20件</option>
+        <option value="50">50件</option>
+        <option value="100">100件</option>
+        <option value="-1" selected>すべて</option>
+      </select>
+    </div>
+  </div>
+  <div class="table-wrapper table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th class="checkbox-column">
+            <input
+              type="checkbox"
+              id="select-all-checkbox"
+              title="すべて選択/解除"
+            />
+          </th>
+          <th>年度</th>
+          <th>学期</th>
+          <th>科目名</th>
+          <th>単位数</th>
+          <th>評価</th>
+          <th>カテゴリ</th>
+          <th>メモ</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="course-list">
+        <!-- ここにJavaScriptで科目を追加していく -->
+      </tbody>
+    </table>
+    <!-- テーブル内の空メッセージ -->
+    <div
+      id="table-empty-message"
+      style="display: none; text-align: center; padding: 20px"
+    >
+      科目が見つかりません。フィルターをクリアするか、新しい科目を追加してください。
+    </div>
+  </div>
+  <!-- ページネーションコントロール -->
+  <div class="pagination-container">
+    <button id="prev-page" class="pagination-btn" disabled>&lt; 前へ</button>
+    <div id="page-numbers" class="page-numbers"></div>
+    <button id="next-page" class="pagination-btn" disabled>次へ &gt;</button>
+    <div class="pagination-info">
+      <span id="pagination-status">0件 / 全0件</span>
+    </div>
+  </div>
+</div>
+
+<h2>単位達成状況</h2>
+<p id="credit-status">読み込み中...</p>
+
+<!-- カテゴリ別の単位集計表示 -->
+<div class="category-summary">
+  <h3>カテゴリ別単位集計</h3>
+  <div id="category-credits-container">
+    <div class="category-group">
+      <h4>専門科目（100単位必要）</h4>
+      <ul>
+        <li>
+          基礎専門科目（20単位必要）:
+          <span id="基礎専門科目-credits">0</span> 単位
+        </li>
+        <li>
+          共通専門科目（22単位必要）:
+          <span id="共通専門科目-credits">0</span> 単位
+        </li>
+        <li>
+          固有専門科目（必修）:
+          <span id="固有専門科目（必修）-credits">0</span> 単位
+        </li>
+        <li>
+          固有専門科目（選択）:
+          <span id="固有専門科目（選択）-credits">0</span> 単位
+        </li>
+        <li>
+          <strong>固有専門科目合計（48単位必要）:</strong>
+          <span id="固有専門科目-total">0</span> 単位
+        </li>
+        <li>
+          グローバル・キャリア養成科目:
+          <span id="グローバル・キャリア養成科目-credits">0</span> 単位
+        </li>
+      </ul>
+      <p>
+        <strong
+          >専門科目合計: <span id="専門科目-total">0</span>/100 単位</strong
+        >
+      </p>
+    </div>
+
+    <div class="category-group">
+      <h4>外国語科目（10単位必要）</h4>
+      <ul>
+        <li>外国語: <span id="外国語-credits">0</span> 単位</li>
+      </ul>
+      <p>
+        <strong>外国語合計: <span id="外国語-total">0</span>/10 単位</strong>
+      </p>
+    </div>
+
+    <div class="category-group">
+      <h4>教養科目（14単位必要）</h4>
+      <ul>
+        <li>教養科目: <span id="教養科目-credits">0</span> 単位</li>
+        <li><small>※ 教職発展科目は8単位まで算入可</small></li>
+      </ul>
+      <p>
+        <strong
+          >教養科目合計: <span id="教養科目-total">0</span>/14 単位</strong
+        >
+      </p>
+    </div>
+
+    <div class="category-group total-summary">
+      <h4>総合計（124単位必要）</h4>
+      <p>
+        <strong>総単位数: <span id="総単位数-display">0</span>/124 単位</strong>
+      </p>
+    </div>
+  </div>
+
+  <!-- カテゴリ要件の進捗状況 -->
+  <div class="requirement-progress">
+    <h4>卒業要件進捗</h4>
+    <div class="progress-item">
+      <label>総単位数 (124単位必要):</label>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="総単位-progress"></div>
+      </div>
+      <span id="総単位-progress-text">0%</span>
+    </div>
+    <div class="progress-item">
+      <label>専門科目 (100単位必要):</label>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="専門科目-progress"></div>
+      </div>
+      <span id="専門科目-progress-text">0%</span>
+    </div>
+    <div class="progress-item">
+      <label>基礎専門科目 (20単位必要):</label>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="基礎専門科目-progress"></div>
+      </div>
+      <span id="基礎専門科目-progress-text">0%</span>
+    </div>
+    <div class="progress-item">
+      <label>共通専門科目 (22単位必要):</label>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="共通専門科目-progress"></div>
+      </div>
+      <span id="共通専門科目-progress-text">0%</span>
+    </div>
+    <div class="progress-item">
+      <label>固有専門科目 (48単位必要):</label>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="固有専門科目-progress"></div>
+      </div>
+      <span id="固有専門科目-progress-text">0%</span>
+    </div>
+    <div class="progress-item">
+      <label>外国語 (10単位必要):</label>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="外国語-progress"></div>
+      </div>
+      <span id="外国語-progress-text">0%</span>
+    </div>
+    <div class="progress-item">
+      <label>教養科目 (14単位必要):</label>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="教養科目-progress"></div>
+      </div>
+      <span id="教養科目-progress-text">0%</span>
+    </div>
+  </div>
+</div>
+
+<h2>GPA・GPS</h2>
+<div class="stats-container">
+  <p>あなたのGPA: <strong id="gpa-display">-.--</strong></p>
+  <p>あなたのGPS: <strong id="gps-display">0.0</strong></p>
+  <p>合計単位数: <strong id="total-credits-display">0</strong></p>
+  <div class="stats-note">
+    <small>※ GPA: Grade Point Average（評価点の平均）</small><br />
+    <small>※ GPS: Grade Point Sum（単位数×評価点の合計）</small>
+  </div>
+</div>
+
+<!-- 評価別単位数カード -->
+<div class="grade-summary-section">
+  <h3>評価別単位数まとめ</h3>
+  <div class="grade-summary-container">
+    <div class="grade-card grade-aplus">
+      <div class="grade-label">A+</div>
+      <div class="grade-value"><span id="aplus-count">0</span>科目</div>
+      <div class="grade-credits"><span id="aplus-credits">0</span>単位</div>
+    </div>
+    <div class="grade-card grade-a">
+      <div class="grade-label">A</div>
+      <div class="grade-value"><span id="a-count">0</span>科目</div>
+      <div class="grade-credits"><span id="a-credits">0</span>単位</div>
+    </div>
+    <div class="grade-card grade-b">
+      <div class="grade-label">B</div>
+      <div class="grade-value"><span id="b-count">0</span>科目</div>
+      <div class="grade-credits"><span id="b-credits">0</span>単位</div>
+    </div>
+    <div class="grade-card grade-c">
+      <div class="grade-label">C</div>
+      <div class="grade-value"><span id="c-count">0</span>科目</div>
+      <div class="grade-credits"><span id="c-credits">0</span>単位</div>
+    </div>
+    <div class="grade-card grade-f">
+      <div class="grade-label">F</div>
+      <div class="grade-value"><span id="f-count">0</span>科目</div>
+      <div class="grade-credits">
+        <span id="f-credits">0</span>単位
+        <small>(単位認定なし)</small>
+      </div>
+    </div>
+    <div class="grade-card grade-total">
+      <div class="grade-label">合計</div>
+      <div class="grade-value"><span id="total-course-count">0</span>科目</div>
+      <div class="grade-credits">
+        <span id="total-grade-credits">0</span>単位
+        <small>(F評価は除く)</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- グラフセクション -->
+<div class="charts-container">
+  <div class="chart-section">
+    <h3>GPA推移</h3>
+    <canvas id="gpa-trend-chart"></canvas>
+  </div>
+  <div class="chart-section">
+    <h3>評価分布</h3>
+    <canvas id="grade-distribution-chart"></canvas>
+  </div>
+  <!-- カテゴリ別分布も同じコンテナに配置 -->
+  <div class="chart-section">
+    <h3>カテゴリ別単位分布</h3>
+    <canvas id="category-distribution-chart"></canvas>
+  </div>
+</div>
+
+<!-- ローディングオーバーレイ -->
+<div class="loading-overlay">
+  <div class="loading-spinner"></div>
+</div>
+
+<!-- 一括追加モーダル -->
+<div id="bulk-add-modal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>複数科目の一括追加</h2>
+
+    <!-- 手動入力のみ -->
+    <div id="manual-tab" class="tab-content active">
+      <p>複数の科目をまとめて入力します。</p>
+      <button id="add-row-btn" class="action-button">+ 行を追加</button>
+
+      <div class="manual-input-table table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>年度</th>
+              <th>学期</th>
+              <th>科目名</th>
+              <th>単位数</th>
+              <th>評価</th>
+              <th>カテゴリ</th>
+              <th>削除</th>
+            </tr>
+          </thead>
+          <tbody id="manual-courses">
+            <!-- 初期行 -->
+            <tr class="manual-row">
+              <td>
+                <input
+                  type="number"
+                  class="manual-year"
+                  value="2025"
+                  min="2000"
+                  max="2100"
+                />
+              </td>
+              <td>
+                <select class="manual-semester">
+                  <option value="春学期">春学期</option>
+                  <option value="秋学期">秋学期</option>
+                </select>
+              </td>
+              <td>
+                <input type="text" class="manual-name" placeholder="科目名" />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  class="manual-credits"
+                  value="2"
+                  min="0.5"
+                  step="0.5"
+                />
+              </td>
+              <td>
+                <select class="manual-grade">
+                  <option value="">未評価</option>
+                  <option value="A+">A+</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="F">F</option>
+                </select>
+              </td>
+              <td>
+                <select class="manual-category">
+                  <option value="基礎専門科目">基礎専門科目</option>
+                  <option value="共通専門科目">共通専門科目</option>
+                  <option value="固有専門科目（必修）">
+                    固有専門科目（必修）
+                  </option>
+                  <option value="固有専門科目（選択）">
+                    固有専門科目（選択）
+                  </option>
+                  <option value="グローバル・キャリア養成科目">
+                    グローバル・キャリア養成科目
+                  </option>
+                  <option value="外国語">外国語</option>
+                  <option value="教養科目">教養科目</option>
+                  <option value="未分類">未分類</option>
+                </select>
+              </td>
+              <td>
+                <button type="button" class="delete-row-btn">×</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-buttons">
+      <button id="execute-bulk-add" class="action-button primary">
+        追加実行
+      </button>
+      <button id="close-modal-btn" class="action-button">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 一括追加ボタンは上部に配置したため削除 -->
+
+<!-- CAMPUSウェブインポートモーダル -->
+<div id="campus-import-modal" class="modal">
+  <div class="modal-content">
+    <span class="close campus-close">&times;</span>
+    <h2>CAMPUSウェブからインポート</h2>
+
+    <div class="campus-import-instructions">
+      <p class="intro-text">
+        CAMPUSウェブの成績表HTMLから科目情報を一括インポートできます。
+      </p>
+
+      <div class="step-container">
+        <div class="step">
+          <span class="step-number">1</span>
+          <div class="step-content">
+            <strong>CAMPUSウェブにアクセス</strong>
+            <p>「成績・履修照会」→「履修状況確認」→「科目一覧」タブを開く</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-number">2</span>
+          <div class="step-content">
+            <strong>HTMLをコピー</strong>
+            <p>
+              ページを右クリック → 「ページのソースを表示」→ 全選択してコピー
+            </p>
+            <details class="browser-details">
+              <summary>ブラウザ別の詳細手順</summary>
+              <ul>
+                <li>
+                  <strong>Chrome/Edge:</strong> 右クリック → 検証 →
+                  <code>&lt;html&gt;</code>右クリック → Copy outerHTML
+                </li>
+                <li>
+                  <strong>Safari:</strong> 右クリック → ページのソースを表示 →
+                  全選択してコピー
+                </li>
+              </ul>
+            </details>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-number">3</span>
+          <div class="step-content">
+            <strong>HTMLを貼り付け</strong>
+            <p>下のテキストエリアにペーストして「HTMLを解析」をクリック</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="security-note">
+        🔒 個人情報は端末内で処理され、外部には送信されません
+      </div>
+    </div>
+
+    <div class="campus-paste-area">
+      <textarea
+        id="campus-html-input"
+        placeholder="ここにCAMPUSウェブの成績表のHTMLを貼り付けてください..."
+      ></textarea>
+    </div>
+
+    <div id="campus-import-preview" style="display: none">
+      <h3>インポート予定の科目 (<span id="campus-import-count">0</span>件)</h3>
+      <div class="campus-preview-container table-responsive">
+        <table id="campus-preview-table">
+          <thead>
+            <tr>
+              <th>年度</th>
+              <th>学期</th>
+              <th>科目名</th>
+              <th>単位数</th>
+              <th>評価</th>
+              <th>カテゴリ</th>
+            </tr>
+          </thead>
+          <tbody id="campus-courses">
+            <!-- ここにインポート予定の科目が表示される -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="campus-import-message" class="import-message"></div>
+
+    <!-- 年度不明科目のフィルタリングオプション -->
+    <div
+      class="campus-filter-options"
+      style="
+        margin: 15px 0;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
+      "
+    >
+      <label
+        class="filter-option-label"
+        style="
+          display: flex;
+          align-items: center;
+          cursor: pointer;
+          font-weight: 500;
+        "
+      >
+        <input
+          type="checkbox"
+          id="include-unknown-year"
+          checked
+          style="margin-right: 8px; transform: scale(1.2)"
+        />
+        <span>未修得科目も含めてインポートする</span>
+      </label>
+      <div class="filter-note" style="margin-top: 8px; color: #757575">
+        <small style="font-size: 0.85em"
+          >※ チェックを外すと、未修得科目は除外されます</small
+        >
+      </div>
+    </div>
+
+    <div class="modal-buttons">
+      <button id="parse-campus-btn" class="action-button primary highlight-btn">
+        HTMLを解析
+      </button>
+      <button
+        id="execute-campus-import"
+        class="action-button primary"
+        style="display: none"
+      >
+        インポート実行
+      </button>
+      <button id="close-campus-modal-btn" class="action-button">
+        キャンセル
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ヘルプセクション削除 -->
+
+<!-- JavaScriptファイルを最後に読み込む -->
+{% endblock %} {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='subject_classifier.js') }}"></script>
+<script src="{{ url_for('static', filename='category_utils.js') }}"></script>
+<script src="{{ url_for('static', filename='pagination.js') }}"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script src="{{ url_for('static', filename='course_modal.js') }}"></script>
+<script src="{{ url_for('static', filename='bulk_add.js') }}"></script>
+<script src="{{ url_for('static', filename='campus_import.js') }}"></script>
+<script src="{{ url_for('static', filename='bulk_delete.js') }}"></script>
+{% endblock %}

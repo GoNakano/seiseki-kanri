@@ -1,0 +1,56 @@
+{% extends "base.html" %} {% block title %}新規登録 | 成績管理アプリ{% endblock
+%} {% block content %}
+<div class="auth-container">
+  <h2>新規アカウント登録</h2>
+
+  <form method="POST" action="{{ url_for('register') }}">
+    {{ form.hidden_tag() }}
+
+    <div class="form-group">
+      {{ form.user_id.label }} {{ form.user_id(class="form-control") }} {% for
+      error in form.user_id.errors %}
+      <span class="form-error">{{ error }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="form-group">
+      {{ form.nickname.label }} {{ form.nickname(class="form-control") }} {% for
+      error in form.nickname.errors %}
+      <span class="form-error">{{ error }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="form-group">
+      {{ form.password.label }} {{ form.password(class="form-control") }} {% for
+      error in form.password.errors %}
+      <span class="form-error">{{ error }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="form-group">
+      {{ form.password2.label }} {{ form.password2(class="form-control") }} {%
+      for error in form.password2.errors %}
+      <span class="form-error">{{ error }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="form-group">
+      {{ form.graduation_year.label }} {{
+      form.graduation_year(class="form-control") }} {% for error in
+      form.graduation_year.errors %}
+      <span class="form-error">{{ error }}</span>
+      {% endfor %}
+      <small>（1〜4の間で入力してください）</small>
+    </div>
+
+    <div class="form-actions">{{ form.submit(class="btn btn-primary") }}</div>
+  </form>
+
+  <div class="auth-links">
+    <p>
+      既にアカウントをお持ちの方は
+      <a href="{{ url_for('login') }}">こちら</a> からログインできます。
+    </p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,304 @@
+{% extends "base.html" %} {% block title %}プロファイル | 成績管理アプリ{%
+endblock %} {% block additional_styles %}
+<style>
+  /* プロフィールページ用のスタイル */
+  .profile-container {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 0 15px;
+  }
+
+  .profile-card {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .profile-card h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+  }
+
+  .form-text {
+    color: #666;
+    font-size: 0.85rem;
+    display: block;
+    margin-top: 5px;
+  }
+
+  .btn-warning {
+    color: #212529;
+    background-color: #ffc107;
+    border-color: #ffc107;
+  }
+
+  .btn-warning:hover {
+    background-color: #e0a800;
+    border-color: #d39e00;
+  }
+
+  .btn-danger {
+    color: #fff;
+    background-color: #dc3545;
+    border-color: #dc3545;
+  }
+
+  .btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+  }
+
+  .delete-account-card {
+    background-color: #fff8f8;
+    border: 1px solid #ffc1c7;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 30px;
+  }
+
+  .delete-account-card h3 {
+    color: #dc3545;
+    border-bottom: 1px solid #ffc1c7;
+  }
+
+  .warning-text {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    border: 1px solid #f5c6cb;
+  }
+
+  .delete-confirm-form {
+    border: 2px solid #dc3545;
+    border-radius: 8px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    margin-top: 15px;
+  }
+
+  .alert {
+    margin-bottom: 20px;
+  }
+
+  .alert h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+  }
+
+  .alert ul {
+    margin-bottom: 0;
+    padding-left: 20px;
+  }
+
+  .alert li {
+    margin-bottom: 8px;
+  }
+
+  .alert li:last-child {
+    margin-bottom: 0;
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="container profile-container">
+  <h2>プロフィール管理</h2>
+
+  <div class="profile-card">
+    <h3>アカウント情報</h3>
+
+    <!-- 注意書き -->
+    <div
+      class="alert alert-info"
+      style="
+        background-color: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+      "
+    >
+      <h4 style="margin-top: 0; color: #0c5460">⚠️ 重要な注意事項</h4>
+      <ul style="margin-bottom: 0; padding-left: 20px">
+        <li>
+          <strong>ユーザーID変更:</strong>
+          ユーザーIDを変更した場合、次回ログイン時は新しいユーザーIDでログインしてください。
+        </li>
+        <li>
+          <strong>ランキング反映:</strong>
+          学年を変更した場合、ランキングページや分布ページの表示に影響します。
+        </li>
+        <li>
+          <strong>データ保持:</strong>
+          プロフィール変更後も、登録済みの成績データは保持されます。
+        </li>
+      </ul>
+    </div>
+
+    <form
+      method="POST"
+      action="{{ url_for('profile') }}"
+      class="form profile-form"
+    >
+      {{ profile_form.hidden_tag() }}
+
+      <div class="form-group">
+        {{ profile_form.user_id.label }} {{
+        profile_form.user_id(class="form-control") }}
+        <small class="form-text"
+          >ログイン時に使用するユーザーIDです。変更した場合は次回ログイン時に新しいIDを使用してください。</small
+        >
+        {% for error in profile_form.user_id.errors %}
+        <span class="form-error">{{ error }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="form-group">
+        {{ profile_form.nickname.label }} {{
+        profile_form.nickname(class="form-control") }} {% for error in
+        profile_form.nickname.errors %}
+        <span class="form-error">{{ error }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="form-group">
+        {{ profile_form.email.label }} {{
+        profile_form.email(class="form-control") }} {% for error in
+        profile_form.email.errors %}
+        <span class="form-error">{{ error }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="form-group">
+        {{ profile_form.grade.label }} {{
+        profile_form.grade(class="form-control") }}
+        <small class="form-text"
+          >学年を1〜4の間で入力してください（例：3）</small
+        >
+        {% for error in profile_form.grade.errors %}
+        <span class="form-error">{{ error }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" name="update_profile" class="btn btn-primary">
+          プロフィールを更新
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="profile-card">
+    <h3>パスワード変更</h3>
+    <form
+      method="POST"
+      action="{{ url_for('profile') }}"
+      class="form password-form"
+    >
+      {{ password_form.hidden_tag() }}
+
+      <div class="form-group">
+        {{ password_form.current_password.label }} {{
+        password_form.current_password(class="form-control") }} {% for error in
+        password_form.current_password.errors %}
+        <span class="form-error">{{ error }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="form-group">
+        {{ password_form.new_password.label }} {{
+        password_form.new_password(class="form-control") }}
+        <small class="form-text">パスワードは8文字以上で設定してください</small>
+        {% for error in password_form.new_password.errors %}
+        <span class="form-error">{{ error }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="form-group">
+        {{ password_form.confirm_password.label }} {{
+        password_form.confirm_password(class="form-control") }} {% for error in
+        password_form.confirm_password.errors %}
+        <span class="form-error">{{ error }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" name="change_password" class="btn btn-warning">
+          パスワードを変更
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- アカウント削除セクション -->
+  <div class="profile-card delete-account-card">
+    <h3>⚠️ アカウント削除</h3>
+
+    <div class="warning-text">
+      <strong>警告:</strong>
+      この操作は取り消すことができません。アカウントを削除すると、あなたの全ての成績データ、プロフィール情報が完全に削除されます。
+    </div>
+
+    <div class="delete-confirm-form">
+      <form
+        method="POST"
+        action="{{ url_for('profile') }}"
+        class="form delete-form"
+        onsubmit="return confirmAccountDeletion()"
+      >
+        {{ delete_form.hidden_tag() }}
+
+        <div class="form-group">
+          {{ delete_form.password.label(class="control-label") }} {{
+          delete_form.password(class="form-control",
+          placeholder="現在のパスワードを入力") }}
+          <small class="form-text"
+            >確認のため、現在のパスワードを入力してください</small
+          >
+          {% for error in delete_form.password.errors %}
+          <span class="form-error">{{ error }}</span>
+          {% endfor %}
+        </div>
+
+        <div class="form-group">
+          {{ delete_form.confirm_text.label(class="control-label") }} {{
+          delete_form.confirm_text(class="form-control",
+          placeholder="「アカウント削除」と入力") }}
+          <small class="form-text"
+            >削除を確認するため、「<strong>アカウント削除</strong>」と正確に入力してください</small
+          >
+          {% for error in delete_form.confirm_text.errors %}
+          <span class="form-error">{{ error }}</span>
+          {% endfor %}
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" name="delete_account" class="btn btn-danger">
+            アカウントを完全に削除
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="profile-actions">
+    <a href="{{ url_for('home') }}" class="btn">ホームに戻る</a>
+  </div>
+</div>
+
+<script>
+  function confirmAccountDeletion() {
+    return confirm(
+      "本当にアカウントを削除しますか？この操作は取り消すことができません。全ての成績データが失われます。"
+    );
+  }
+</script>
+
+{% endblock %}

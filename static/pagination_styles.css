@@ -1,0 +1,220 @@
+/* ページネーション関連のスタイル */
+.pagination-container {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0 0 8px 8px;
+}
+
+.pagination-btn {
+  background-color: white;
+  border: 2px solid var(--border-color);
+  padding: 10px 16px;
+  margin: 0 5px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  color: var(--text-dark);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+}
+
+.pagination-btn:disabled {
+  background-color: #f8f9fa;
+  border-color: #e9ecef;
+  color: #adb5bd;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.page-numbers {
+  display: flex;
+  align-items: center;
+  margin: 0 10px;
+}
+
+.page-number {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 32px;
+  height: 32px;
+  margin: 0 3px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.page-number:hover {
+  background-color: #f0f7ff;
+}
+
+.page-number.current-page {
+  background-color: var(--primary-color);
+  color: white;
+  font-weight: 500;
+}
+
+.page-ellipsis {
+  margin: 0 5px;
+  color: var(--text-light);
+}
+
+.pagination-info {
+  margin-left: auto;
+  color: var(--text-light);
+  font-size: 14px;
+}
+
+.pagination-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pagination-controls span {
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.pagination-controls select {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: white;
+  font-size: 14px;
+}
+
+/* テーブルアクションエリアのスタイル改善 */
+.table-actions {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  border-radius: 8px 8px 0 0;
+}
+
+/* テーブルのスタイル改善 */
+#course-list-container {
+  margin: 20px 0;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+/* テーブルラッパーで固定ヘッダーを実現 */
+.table-wrapper {
+  max-height: 600px;
+  overflow-y: auto;
+  position: relative;
+}
+
+/* 固定ヘッダーのテーブル */
+#course-list-container table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: 14px;
+}
+
+#course-list-container thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: #f3f3f3;
+}
+
+#course-list-container th {
+  padding: 12px 15px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-dark);
+  border-bottom: 2px solid var(--border-color);
+  position: relative;
+}
+
+/* スクロール時のヘッダー下部のシャドウ効果 */
+#course-list-container thead::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.05), transparent);
+}
+
+#course-list-container td {
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* ゼブラストライプ（縞模様）効果 */
+#course-list-container tbody tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+#course-list-container tbody tr:hover {
+  background-color: #f0f7ff;
+}
+
+/* F評価のスタイリング強化 */
+.failed-course {
+  background-color: rgba(229, 57, 53, 0.05) !important;
+}
+
+.grade-f {
+  color: var(--danger-color);
+  font-weight: 600;
+}
+
+/* モーダルダイアログの改善 */
+.course-modal-content {
+  max-width: 700px;
+}
+
+.course-modal-body {
+  margin-top: 15px;
+}
+
+.course-modal-body table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.course-modal-body th,
+.course-modal-body td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.course-modal-body th {
+  width: 30%;
+  background-color: #f8f9fa;
+}
+
+.course-modal-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

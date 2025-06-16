@@ -1,0 +1,17 @@
+# Core Flask dependencies
+Flask==2.3.3
+Flask-Login==0.6.3
+Flask-WTF==1.1.1
+WTForms==3.0.1
+
+# HTML parsing for CAMPUS web integration
+beautifulsoup4==4.12.2
+
+# Security
+Werkzeug==2.3.7
+
+# Production server (optional)
+gunicorn==21.2.0
+
+# Environment management
+python-dotenv==1.0.0
