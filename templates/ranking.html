@@ -836,7 +836,7 @@ endblock %} {% block additional_styles %}
                     <tr>
                         <th>順位</th>
                         <th>ニックネーム</th>
-                        <th>卒業年度</th>
+                        <th>学年</th>
                         <th>GPA</th>
                         <th>GPS</th>
                         <th>取得単位数</th>
@@ -856,7 +856,7 @@ endblock %} {% block additional_styles %}
                         <span class="rank-badge ${rankClass}">${user.rank}</span>
                     </td>
                     <td>${user.nickname}</td>
-                    <td>${user.graduation_year}年</td>
+                    <td>${user.graduation_year}年生</td>
                     <td>${user.gpa}</td>
                     <td>${user.gps}</td>
                     <td>${user.total_credits}</td>
@@ -1172,13 +1172,13 @@ endblock %} {% block additional_styles %}
               // ランキング用
               const option1 = document.createElement("option");
               option1.value = grade;
-              option1.textContent = `${grade}年`;
+              option1.textContent = `${grade}年生`;
               gradeSelect.appendChild(option1);
 
               // 分布用
               const option2 = document.createElement("option");
               option2.value = grade;
-              option2.textContent = `${grade}年`;
+              option2.textContent = `${grade}年生`;
               statsGradeSelect.appendChild(option2);
             });
 
