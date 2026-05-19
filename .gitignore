@@ -57,3 +57,26 @@ test_*.py
 # クッキーファイル
 cookies.txt
 *.cookies
+# macOS archive metadata
+__MACOSX/
+
+# SQLite auxiliary files
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
