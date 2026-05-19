@@ -27,6 +27,20 @@
 
 ---
 
+## 画面イメージ
+
+> 以下はダミーデータを用いた画面例です。実際の成績情報は含まれていません。
+
+### 科目管理画面
+
+![科目管理画面](docs/screenshots/course-list.png)
+
+### GPA・単位取得状況の可視化画面
+
+![GPA・単位取得状況の可視化画面](docs/screenshots/dashboard-charts.png)
+
+---
+
 ## 主な機能
 
 ### 成績データ管理
@@ -128,7 +142,7 @@ cd seiseki-kanri
 ### 2. 仮想環境を作成
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 ```
 
@@ -155,27 +169,33 @@ cp .env.example .env
 ### 5. アプリを起動
 
 ```bash
-python app.py
+python3 app.py
 ```
 
 開発環境では、以下のURLからアクセスできます。
 
 ```text
-http://localhost:5001
+http://localhost:5000
+```
+
+ポートが使用中の場合は、`.env`の`PORT`を変更してください。
+
+```env
+PORT=5001
 ```
 
 ---
 
 ## 開発用初期アカウント
 
-開発環境では、初回起動時に以下の管理者ユーザーが作成されます。
+開発環境では、初回起動時に管理者ユーザーが作成されます。
 
 ```text
 ユーザーID: admin
-パスワード: admin1234
+パスワード: .env の ADMIN_PASSWORD に設定した値
 ```
 
-これはローカル開発用の初期アカウントです。  
+`.env.example`をそのままコピーした場合は、サンプル用のパスワードが使用されます。  
 公開環境で利用する場合は、必ず`.env`で強力なパスワードを設定してください。
 
 ---
