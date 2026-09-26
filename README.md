@@ -1,6 +1,6 @@
 # seiseki-kanri
 
-[![CI](https://github.com/GoNakano/seiseki-kanri-public/actions/workflows/ci.yml/badge.svg)](https://github.com/GoNakano/seiseki-kanri-public/actions/workflows/ci.yml)
+[![CI](https://github.com/GoNakano/seiseki-kanri/actions/workflows/ci.yml/badge.svg)](https://github.com/GoNakano/seiseki-kanri/actions/workflows/ci.yml)
 
 大学の成績を登録して、GPA/GPSや取得単位を確認するFlaskアプリです。
 
@@ -124,8 +124,8 @@ Python 3.11以降を使用してください。
 GitHubの「Code」から取得したURLを使ってクローンします。
 
 ```bash
-git clone https://github.com/GoNakano/seiseki-kanri-public.git
-cd seiseki-kanri-public
+git clone https://github.com/GoNakano/seiseki-kanri.git
+cd seiseki-kanri
 ```
 
 ### 2. 仮想環境を作成
