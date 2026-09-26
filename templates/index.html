@@ -900,6 +900,9 @@
     requiredCredits: {{ required_credits|default(124)|tojson }}
   };
 </script>
+<script id="subject-categories-data" type="application/json">
+  {{ subject_categories|tojson }}
+</script>
 <script src="{{ url_for('static', filename='subject_classifier.js') }}"></script>
 <script src="{{ url_for('static', filename='category_utils.js') }}"></script>
 <script src="{{ url_for('static', filename='pagination.js') }}"></script>
