@@ -632,6 +632,8 @@ def delete_course():
     with get_db() as conn:
         c = conn.cursor()
         c.execute("DELETE FROM grades WHERE id = ? AND user_id = ?", (index, current_user.id))
+        if c.rowcount == 0:
+            return jsonify({'status': 'error', 'message': '削除できる科目が見つかりません。'}), 404
         conn.commit()
     return jsonify({'status': 'deleted'})
 
@@ -663,6 +665,8 @@ def update_course():
                 index,
                 current_user.id
             ))
+            if c.rowcount == 0:
+                return jsonify({'status': 'error', 'message': '更新できる科目が見つかりません。'}), 404
             conn.commit()
         return jsonify({'status': 'updated'})
     except Exception as e:
@@ -1175,6 +1179,14 @@ def profile():
 
                 # ユーザーの成績データを削除
                 c.execute('DELETE FROM grades WHERE user_id = ?', (user_id,))
+
+                # ユーザーの講義レビューと、それに付いた通報・本人が行った通報を削除
+                c.execute('''
+                    DELETE FROM review_reports
+                    WHERE reporter_user_id = ?
+                       OR review_id IN (SELECT id FROM course_reviews WHERE user_id = ?)
+                ''', (user_id, user_id))
+                c.execute('DELETE FROM course_reviews WHERE user_id = ?', (user_id,))
 
                 # ユーザーアカウントを削除
                 c.execute('DELETE FROM users WHERE id = ?', (user_id,))

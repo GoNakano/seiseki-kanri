@@ -76,6 +76,57 @@ class AppSmokeTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.client.get("/api/get_courses").status_code, 302)
 
+    def add_course_for_current_user(self, name="Owned Course"):
+        self.client.post(
+            "/api/add_course",
+            json={"year": 2026, "semester": "Spring", "name": name, "credits": 2,
+                  "grade": "A", "category": "未分類", "memo": ""},
+        )
+        return self.client.get("/api/get_courses").get_json()[-1]["id"]
+
+    def test_other_users_course_cannot_be_updated_or_deleted(self):
+        self.register_user("owner", "Owner")
+        course_id = self.add_course_for_current_user()
+        self.client.get("/logout")
+
+        self.register_user("intruder", "Intruder")
+        response = self.client.post(
+            "/api/update_course",
+            json={"index": course_id, "course": {"name": "Changed", "credits": 1}},
+        )
+        self.assertEqual(response.status_code, 404)
+        response = self.client.post("/api/delete_course", json={"index": course_id})
+        self.assertEqual(response.status_code, 404)
+
+        conn = sqlite3.connect(DB_FILE)
+        name = conn.execute("SELECT name FROM grades WHERE id = ?", (course_id,)).fetchone()
+        conn.close()
+        self.assertEqual(name, ("Owned Course",))
+
+    def test_deleting_account_removes_reviews_and_reports(self):
+        review = {"course_name": "Database", "term": "2026 Spring", "difficulty": 3,
+                  "workload": 3, "comment": "Dummy", "is_public": True}
+        self.register_user("reviewer", "Reviewer")
+        review_id = self.client.post("/api/reviews", json=review).get_json()["review_id"]
+        self.client.get("/logout")
+
+        self.register_user("reporter", "Reporter")
+        self.client.post(f"/api/reviews/{review_id}/report")
+        self.client.get("/logout")
+
+        self.client.post("/login", data={"user_id": "reviewer", "password": "password123"})
+        response = self.client.post(
+            "/profile",
+            data={"delete_account": "1", "password": "password123", "confirm_text": "アカウント削除"},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        conn = sqlite3.connect(DB_FILE)
+        reviews = conn.execute("SELECT COUNT(*) FROM course_reviews").fetchone()[0]
+        reports = conn.execute("SELECT COUNT(*) FROM review_reports").fetchone()[0]
+        conn.close()
+        self.assertEqual((reviews, reports), (0, 0))
+
     def test_health_check_is_public(self):
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
