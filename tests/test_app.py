@@ -44,6 +44,12 @@ class AppSmokeTest(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 302)
 
+    def test_home_page_embeds_subject_category_data(self):
+        self.register_user("categoryuser", "Category User")
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'id="subject-categories-data"', response.data)
+
     def test_health_check_is_public(self):
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
