@@ -125,7 +125,7 @@ routes/
   reviews.py           講義レビュー
   ranking.py           ランキング（ENABLE_RANKINGで無効にできる）
 static/data/subject_categories.json  科目一覧と分類ルール（サーバーと画面で共通）
-templates/             画面のHTML
+templates/             画面のHTML（スタイルとスクリプトは static/ に分けている）
 tests/                 自動テスト
 ```
 
