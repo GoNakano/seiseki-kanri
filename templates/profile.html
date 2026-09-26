@@ -1,111 +1,6 @@
 {% extends "base.html" %} {% block title %}プロファイル | 成績管理アプリ{%
 endblock %} {% block additional_styles %}
-<style>
-  /* プロフィールページ用のスタイル */
-  .profile-container {
-    max-width: 800px;
-    margin: 20px auto;
-    padding: 0 15px;
-  }
-
-  .profile-card {
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-
-  .profile-card h3 {
-    margin-top: 0;
-    margin-bottom: 20px;
-    color: #333;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
-  }
-
-  .form-text {
-    color: #666;
-    font-size: 0.85rem;
-    display: block;
-    margin-top: 5px;
-  }
-
-  .btn-warning {
-    color: #212529;
-    background-color: #ffc107;
-    border-color: #ffc107;
-  }
-
-  .btn-warning:hover {
-    background-color: #e0a800;
-    border-color: #d39e00;
-  }
-
-  .btn-danger {
-    color: #fff;
-    background-color: #dc3545;
-    border-color: #dc3545;
-  }
-
-  .btn-danger:hover {
-    background-color: #c82333;
-    border-color: #bd2130;
-  }
-
-  .delete-account-card {
-    background-color: #fff8f8;
-    border: 1px solid #ffc1c7;
-    border-radius: 8px;
-    padding: 20px;
-    margin-top: 30px;
-  }
-
-  .delete-account-card h3 {
-    color: #dc3545;
-    border-bottom: 1px solid #ffc1c7;
-  }
-
-  .warning-text {
-    background-color: #f8d7da;
-    color: #721c24;
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 15px;
-    border: 1px solid #f5c6cb;
-  }
-
-  .delete-confirm-form {
-    border: 2px solid #dc3545;
-    border-radius: 8px;
-    padding: 20px;
-    background-color: #f8f9fa;
-    margin-top: 15px;
-  }
-
-  .alert {
-    margin-bottom: 20px;
-  }
-
-  .alert h4 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 1.1rem;
-  }
-
-  .alert ul {
-    margin-bottom: 0;
-    padding-left: 20px;
-  }
-
-  .alert li {
-    margin-bottom: 8px;
-  }
-
-  .alert li:last-child {
-    margin-bottom: 0;
-  }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='profile.css') }}" />
 {% endblock %} {% block content %}
 <div class="container profile-container">
   <h2>プロフィール管理</h2>
@@ -304,12 +199,6 @@ endblock %} {% block additional_styles %}
   </div>
 </div>
 
-<script>
-  function confirmAccountDeletion() {
-    return confirm(
-      "本当にアカウントを削除しますか？この操作は取り消すことができません。全ての成績データが失われます。"
-    );
-  }
-</script>
+<script src="{{ url_for('static', filename='profile.js') }}"></script>
 
 {% endblock %}
