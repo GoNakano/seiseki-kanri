@@ -3,7 +3,7 @@
 <div class="auth-container">
   <h2>新規アカウント登録</h2>
 
-  <form method="POST" action="{{ url_for('register') }}">
+  <form method="POST" action="{{ url_for('auth.register') }}">
     {{ form.hidden_tag() }}
 
     <div class="form-group">
@@ -48,7 +48,7 @@
   <div class="auth-links">
     <p>
       既にアカウントをお持ちの方は
-      <a href="{{ url_for('login') }}">こちら</a> からログインできます。
+      <a href="{{ url_for('auth.login') }}">こちら</a> からログインできます。
     </p>
   </div>
 </div>
