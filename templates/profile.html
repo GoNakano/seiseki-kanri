@@ -144,7 +144,7 @@ endblock %} {% block additional_styles %}
 
     <form
       method="POST"
-      action="{{ url_for('profile') }}"
+      action="{{ url_for('auth.profile') }}"
       class="form profile-form"
     >
       {{ profile_form.hidden_tag() }}
@@ -210,7 +210,7 @@ endblock %} {% block additional_styles %}
     <h3>パスワード変更</h3>
     <form
       method="POST"
-      action="{{ url_for('profile') }}"
+      action="{{ url_for('auth.profile') }}"
       class="form password-form"
     >
       {{ password_form.hidden_tag() }}
@@ -260,7 +260,7 @@ endblock %} {% block additional_styles %}
     <div class="delete-confirm-form">
       <form
         method="POST"
-        action="{{ url_for('profile') }}"
+        action="{{ url_for('auth.profile') }}"
         class="form delete-form"
         onsubmit="return confirmAccountDeletion()"
       >
@@ -300,7 +300,7 @@ endblock %} {% block additional_styles %}
   </div>
 
   <div class="profile-actions">
-    <a href="{{ url_for('home') }}" class="btn">ホームに戻る</a>
+    <a href="{{ url_for('courses.home') }}" class="btn">ホームに戻る</a>
   </div>
 </div>
 

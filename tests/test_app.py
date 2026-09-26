@@ -9,7 +9,10 @@ os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["SKIP_DB_INIT"] = "1"
 os.environ["DATABASE_PATH"] = os.path.join(TEST_DIR.name, "test.db")
 
-from app import DB_FILE, app, calculate_gpa_gps, get_db, get_user_statistics, initialize_database
+from app import app
+from db import get_db, initialize_database
+from settings import DB_FILE
+from stats import calculate_gpa_gps, get_user_statistics
 
 app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
 initialize_database()

@@ -63,9 +63,11 @@ Python側の集計とブラウザ側の表示で同じ5段階のルールを使�
 
 ### 自動テスト
 
-`tests/test_app.py` で、ダミーデータを使って次の点を確認しています。GitHub Actionsでpushのたびに実行します。
+`tests/` で、ダミーデータを使って次の点を確認しています。GitHub Actionsでpushのたびに実行します。
 
-- 他のユーザーの科目が一覧に出ないこと、CSV出力が自分の科目だけになること
+- 他のユーザーの科目が一覧に出ず、更新・削除もできないこと、CSV出力が自分の科目だけになること
+- ログイン（誤ったパスワードでは入れないこと）と、アカウント削除で本人のレビューも消えること
+- 科目名からのカテゴリ推定（全角数字の扱い、キーワードによる推定を含む）
 - GPAと取得単位の計算（F評価の扱いを含む）
 - 成績表HTMLの解析と、想定外のHTMLを拒否すること
 - 講義レビューの匿名表示と、非公開レビューが一覧に出ないこと
@@ -105,6 +107,27 @@ python -m unittest discover -s tests -p "test_*.py"
 - `/healthz`による稼働確認
 
 ---
+
+## ファイル構成
+
+```text
+app.py                 アプリの入口（設定・ログイン管理・セキュリティヘッダー・ルートの登録）
+settings.py            環境変数から読む設定
+db.py                  データベースの接続（get_db）・テーブル作成
+models.py              ログインに使うユーザー
+forms.py               入力フォーム
+stats.py               GPA・GPSの計算とランキング用の集計
+subject_categories.py  科目名からカテゴリを推定する
+routes/
+  auth.py              ログイン・新規登録・プロフィール
+  courses.py           ホーム画面、科目の登録・更新・削除・CSV出力
+  campus_import.py     成績表HTMLの解析
+  reviews.py           講義レビュー
+  ranking.py           ランキング（ENABLE_RANKINGで無効にできる）
+static/data/subject_categories.json  科目一覧と分類ルール（サーバーと画面で共通）
+templates/             画面のHTML
+tests/                 自動テスト
+```
 
 ## データの流れ
 

@@ -4,7 +4,7 @@
   <h1>成績管理アプリ</h1>
   <h2>ログイン</h2>
 
-  <form method="POST" action="{{ url_for('login') }}">
+  <form method="POST" action="{{ url_for('auth.login') }}">
     {{ form.hidden_tag() }}
 
     <div class="form-group">
@@ -31,7 +31,7 @@
   <div class="auth-links">
     <p>
       アカウントをお持ちでない方は
-      <a href="{{ url_for('register') }}">こちら</a> から登録できます。
+      <a href="{{ url_for('auth.register') }}">こちら</a> から登録できます。
     </p>
   </div>
 </div>
