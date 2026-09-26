@@ -100,6 +100,8 @@ python -m unittest discover -s tests -p "test_*.py"
 ### その他
 
 - Git / GitHub
+- GitHub Actions（pushのたびに自動テスト）
+- Dependabot（依存ライブラリの更新通知）
 
 ### 起動・運用
 

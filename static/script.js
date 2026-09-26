@@ -785,13 +785,16 @@ function updateHeaderStats() {
     headerGpsEl.textContent = gps.toFixed(1);
   }
 
-  // 総取得単位数更新
+  // 総取得単位数更新（上部の統計と「GPA・GPS」欄の両方）
+  const earnedCredits = courses.reduce(
+    (sum, course) => sum + earnedCreditsForCourse(course), 0
+  );
   const headerCreditsEl = document.getElementById("header-credits");
   if (headerCreditsEl) {
-    const totalCredits = courses.reduce(
-      (sum, course) => sum + earnedCreditsForCourse(course), 0
-    );
-    headerCreditsEl.textContent = totalCredits.toString();
+    headerCreditsEl.textContent = earnedCredits.toString();
+  }
+  if (totalCreditsDisplay) {
+    totalCreditsDisplay.textContent = earnedCredits.toString();
   }
 
   // 卒業までの残り単位更新
