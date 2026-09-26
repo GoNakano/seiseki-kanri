@@ -1,5 +1,6 @@
 from flask import Flask, Response, render_template, jsonify, request, redirect, url_for, flash, session, abort
 import sqlite3
+from contextlib import contextmanager
 import csv
 import io
 import os
@@ -60,6 +61,22 @@ db_directory = os.path.dirname(DB_FILE)
 if db_directory:
     os.makedirs(db_directory, exist_ok=True)
 
+
+@contextmanager
+def get_db():
+    """DBに接続し、withブロックを抜けるときに必ず接続を閉じる。
+
+    行は列名でも番号でも参照できる（sqlite3.Row）。
+    変更を保存するには、ブロックの中で conn.commit() を呼ぶ。
+    commit せずに抜けた変更は保存されない。
+    """
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
 if IS_PRODUCTION:
     app.config.update(
         SESSION_COOKIE_SECURE=True,
@@ -107,79 +124,73 @@ def inject_app_flags():
     return {'ranking_enabled': RANKING_ENABLED}
 
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    
-    # ユーザーテーブルの作成
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT,
-        password_hash TEXT NOT NULL,
-        name TEXT NOT NULL,
-        user_id TEXT UNIQUE,
-        nickname TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        current_year INTEGER,
-        required_credits REAL DEFAULT 124.0,
-        settings_json TEXT
-    )''')
-    
-    # 既存のgradesテーブルがない場合は作成
-    c.execute('''CREATE TABLE IF NOT EXISTS grades (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        year INTEGER,
-        semester TEXT,
-        name TEXT,
-        credits REAL,
-        grade TEXT,
-        category TEXT DEFAULT '未分類',
-        memo TEXT,
-        user_id INTEGER
-    )''')
+    with get_db() as conn:
+        c = conn.cursor()
 
-    # 講義レビューは成績データと分離し、公開範囲をユーザーが選べるようにする。
-    c.execute('''CREATE TABLE IF NOT EXISTS course_reviews (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        course_key TEXT NOT NULL,
-        course_name TEXT NOT NULL,
-        course_code TEXT,
-        instructor TEXT,
-        term TEXT NOT NULL DEFAULT '',
-        difficulty INTEGER NOT NULL,
-        workload INTEGER NOT NULL,
-        attendance TEXT NOT NULL DEFAULT '不明',
-        assessment TEXT,
-        comment TEXT,
-        is_public INTEGER NOT NULL DEFAULT 0,
-        is_reported INTEGER NOT NULL DEFAULT 0,
-        user_id INTEGER NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, course_key, term)
-    )''')
+        # ユーザーテーブルの作成
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT,
+            password_hash TEXT NOT NULL,
+            name TEXT NOT NULL,
+            user_id TEXT UNIQUE,
+            nickname TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            current_year INTEGER,
+            required_credits REAL DEFAULT 124.0,
+            settings_json TEXT
+        )''')
 
-    c.execute('''CREATE TABLE IF NOT EXISTS review_reports (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        review_id INTEGER NOT NULL,
-        reporter_user_id INTEGER NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(review_id, reporter_user_id)
-    )''')
-    
-    conn.commit()
-    conn.close()
+        # 既存のgradesテーブルがない場合は作成
+        c.execute('''CREATE TABLE IF NOT EXISTS grades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            year INTEGER,
+            semester TEXT,
+            name TEXT,
+            credits REAL,
+            grade TEXT,
+            category TEXT DEFAULT '未分類',
+            memo TEXT,
+            user_id INTEGER
+        )''')
+
+        # 講義レビューは成績データと分離し、公開範囲をユーザーが選べるようにする。
+        c.execute('''CREATE TABLE IF NOT EXISTS course_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            course_key TEXT NOT NULL,
+            course_name TEXT NOT NULL,
+            course_code TEXT,
+            instructor TEXT,
+            term TEXT NOT NULL DEFAULT '',
+            difficulty INTEGER NOT NULL,
+            workload INTEGER NOT NULL,
+            attendance TEXT NOT NULL DEFAULT '不明',
+            assessment TEXT,
+            comment TEXT,
+            is_public INTEGER NOT NULL DEFAULT 0,
+            is_reported INTEGER NOT NULL DEFAULT 0,
+            user_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, course_key, term)
+        )''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS review_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            review_id INTEGER NOT NULL,
+            reporter_user_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(review_id, reporter_user_id)
+        )''')
+
+        conn.commit()
 
 def create_default_user():
     """明示的に有効化された場合だけ初期管理者ユーザーを作成する。"""
     if not DEMO_ADMIN_ENABLED:
         return
 
-    conn = None
     try:
-        # INSERT OR IGNOREで、開発サーバーの再読み込みや複数ワーカー起動にも耐える。
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
-
         admin_password = os.environ.get('ADMIN_PASSWORD')
         if not admin_password:
             raise RuntimeError(
@@ -187,19 +198,19 @@ def create_default_user():
             )
 
         password_hash = generate_password_hash(admin_password)
-        c.execute('''
-            INSERT OR IGNORE INTO users (email, name, password_hash, current_year, required_credits, user_id, nickname)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', ("admin@example.com", "管理者", password_hash, 2025, 124.0, "admin", "管理者"))
-        if c.rowcount == 1:
-            app.logger.info('デフォルト管理者ユーザーを作成しました。')
-        conn.commit()
-    except Exception as e:
+        # INSERT OR IGNOREで、開発サーバーの再読み込みや複数ワーカー起動にも耐える。
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute('''
+                INSERT OR IGNORE INTO users (email, name, password_hash, current_year, required_credits, user_id, nickname)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', ("admin@example.com", "管理者", password_hash, 2025, 124.0, "admin", "管理者"))
+            if c.rowcount == 1:
+                app.logger.info('デフォルト管理者ユーザーを作成しました。')
+            conn.commit()
+    except Exception:
         app.logger.exception('管理者アカウントの初期化に失敗しました')
         raise
-    finally:
-        if conn is not None:
-            conn.close()
 
 
 def initialize_database():
@@ -233,9 +244,7 @@ def healthz():
 @login_required
 def export_courses():
     """ログイン中のユーザーの成績だけをCSVで出力する。"""
-    conn = sqlite3.connect(DB_FILE)
-    try:
-        conn.row_factory = sqlite3.Row
+    with get_db() as conn:
         c = conn.cursor()
         c.execute('''
             SELECT year, semester, name, credits, grade, category, memo
@@ -244,8 +253,6 @@ def export_courses():
             ORDER BY year IS NULL, year, semester, id
         ''', (current_user.id,))
         rows = c.fetchall()
-    finally:
-        conn.close()
 
     output = io.StringIO(newline='')
     writer = csv.writer(output)
@@ -286,35 +293,33 @@ def load_demo_data():
         ('', '秋学期', '履修予定科目', 2.0, '', '未分類', 'サンプルデータ（履修予定）'),
     ]
 
-    conn = sqlite3.connect(DB_FILE)
-    try:
-        c = conn.cursor()
-        c.execute('SELECT COUNT(*) FROM grades WHERE user_id = ?', (current_user.id,))
-        if c.fetchone()[0] > 0:
+    with get_db() as conn:
+        try:
+            c = conn.cursor()
+            c.execute('SELECT COUNT(*) FROM grades WHERE user_id = ?', (current_user.id,))
+            if c.fetchone()[0] > 0:
+                return jsonify({
+                    'status': 'error',
+                    'message': '既に科目データがあるため、サンプルデータは追加しませんでした。',
+                }), 409
+
+            c.executemany('''
+                INSERT INTO grades (year, semester, name, credits, grade, category, memo, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', [course + (current_user.id,) for course in demo_courses])
+            conn.commit()
+            return jsonify({
+                'status': 'ok',
+                'count': len(demo_courses),
+                'message': 'サンプルデータを追加しました。',
+            })
+        except sqlite3.Error:
+            conn.rollback()
+            app.logger.exception('サンプルデータの追加に失敗しました')
             return jsonify({
                 'status': 'error',
-                'message': '既に科目データがあるため、サンプルデータは追加しませんでした。',
-            }), 409
-
-        c.executemany('''
-            INSERT INTO grades (year, semester, name, credits, grade, category, memo, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', [course + (current_user.id,) for course in demo_courses])
-        conn.commit()
-        return jsonify({
-            'status': 'ok',
-            'count': len(demo_courses),
-            'message': 'サンプルデータを追加しました。',
-        })
-    except sqlite3.Error:
-        conn.rollback()
-        app.logger.exception('サンプルデータの追加に失敗しました')
-        return jsonify({
-            'status': 'error',
-            'message': 'サンプルデータの追加に失敗しました。',
-        }), 500
-    finally:
-        conn.close()
+                'message': 'サンプルデータの追加に失敗しました。',
+            }), 500
 
 
 def normalize_review_text(value):
@@ -391,9 +396,7 @@ def reviews():
 def list_reviews():
     """公開設定された講義レビューを匿名集計して返す。"""
     query = request.args.get('query', '').strip().lower()
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    try:
+    with get_db() as conn:
         conditions = ['is_public = 1', 'is_reported = 0']
         params = []
         if query:
@@ -421,17 +424,13 @@ def list_reviews():
             LIMIT 50
         ''', params)
         return jsonify([dict(row) for row in c.fetchall()])
-    finally:
-        conn.close()
 
 
 @app.route('/api/reviews/mine', methods=['GET'])
 @login_required
 def list_my_reviews():
     """ログイン中のユーザー自身のレビューを公開範囲に関係なく返す。"""
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    try:
+    with get_db() as conn:
         c = conn.cursor()
         c.execute('''
             SELECT id, course_key, course_name, course_code, instructor, term,
@@ -443,8 +442,6 @@ def list_my_reviews():
             LIMIT 50
         ''', (current_user.id,))
         return jsonify([dict(row) for row in c.fetchall()])
-    finally:
-        conn.close()
 
 
 @app.route('/api/reviews/detail', methods=['GET'])
@@ -454,9 +451,7 @@ def review_detail():
     if not course_key:
         return jsonify({'status': 'error', 'message': '講義を指定してください。'}), 400
 
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    try:
+    with get_db() as conn:
         c = conn.cursor()
         c.execute('''
             SELECT
@@ -503,8 +498,6 @@ def review_detail():
             'comments': comments,
             'own_reviews': own_reviews,
         })
-    finally:
-        conn.close()
 
 
 @app.route('/api/reviews', methods=['POST'])
@@ -514,59 +507,56 @@ def save_review():
     if error:
         return jsonify({'status': 'error', 'message': error}), 400
 
-    conn = sqlite3.connect(DB_FILE)
-    try:
-        c = conn.cursor()
-        c.execute('''
-            SELECT id FROM course_reviews
-            WHERE user_id = ? AND course_key = ? AND term = ?
-        ''', (current_user.id, payload['course_key'], payload['term']))
-        existing = c.fetchone()
+    with get_db() as conn:
+        try:
+            c = conn.cursor()
+            c.execute('''
+                SELECT id FROM course_reviews
+                WHERE user_id = ? AND course_key = ? AND term = ?
+            ''', (current_user.id, payload['course_key'], payload['term']))
+            existing = c.fetchone()
 
-        values = (
-            payload['course_name'], payload['course_code'], payload['instructor'],
-            payload['difficulty'], payload['workload'], payload['attendance'],
-            payload['assessment'], payload['comment'], payload['is_public'],
-        )
-        if existing:
-            c.execute('''
-                UPDATE course_reviews
-                SET course_name = ?, course_code = ?, instructor = ?,
-                    difficulty = ?, workload = ?, attendance = ?,
-                    assessment = ?, comment = ?, is_public = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND user_id = ?
-            ''', values + (existing[0], current_user.id))
-            review_id = existing[0]
-        else:
-            c.execute('''
-                INSERT INTO course_reviews (
-                    course_key, course_name, course_code, instructor, term,
-                    difficulty, workload, attendance, assessment, comment,
-                    is_public, user_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                payload['course_key'], payload['course_name'], payload['course_code'],
-                payload['instructor'], payload['term'], payload['difficulty'],
-                payload['workload'], payload['attendance'], payload['assessment'],
-                payload['comment'], payload['is_public'], current_user.id,
-            ))
-            review_id = c.lastrowid
-        conn.commit()
-        return jsonify({'status': 'ok', 'review_id': review_id})
-    except sqlite3.Error:
-        conn.rollback()
-        app.logger.exception('講義レビューの保存に失敗しました')
-        return jsonify({'status': 'error', 'message': '講義レビューを保存できませんでした。'}), 500
-    finally:
-        conn.close()
+            values = (
+                payload['course_name'], payload['course_code'], payload['instructor'],
+                payload['difficulty'], payload['workload'], payload['attendance'],
+                payload['assessment'], payload['comment'], payload['is_public'],
+            )
+            if existing:
+                c.execute('''
+                    UPDATE course_reviews
+                    SET course_name = ?, course_code = ?, instructor = ?,
+                        difficulty = ?, workload = ?, attendance = ?,
+                        assessment = ?, comment = ?, is_public = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                ''', values + (existing[0], current_user.id))
+                review_id = existing[0]
+            else:
+                c.execute('''
+                    INSERT INTO course_reviews (
+                        course_key, course_name, course_code, instructor, term,
+                        difficulty, workload, attendance, assessment, comment,
+                        is_public, user_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    payload['course_key'], payload['course_name'], payload['course_code'],
+                    payload['instructor'], payload['term'], payload['difficulty'],
+                    payload['workload'], payload['attendance'], payload['assessment'],
+                    payload['comment'], payload['is_public'], current_user.id,
+                ))
+                review_id = c.lastrowid
+            conn.commit()
+            return jsonify({'status': 'ok', 'review_id': review_id})
+        except sqlite3.Error:
+            conn.rollback()
+            app.logger.exception('講義レビューの保存に失敗しました')
+            return jsonify({'status': 'error', 'message': '講義レビューを保存できませんでした。'}), 500
 
 
 @app.route('/api/reviews/<int:review_id>', methods=['DELETE'])
 @login_required
 def delete_review(review_id):
-    conn = sqlite3.connect(DB_FILE)
-    try:
+    with get_db() as conn:
         c = conn.cursor()
         c.execute(
             'DELETE FROM course_reviews WHERE id = ? AND user_id = ?',
@@ -577,15 +567,12 @@ def delete_review(review_id):
         c.execute('DELETE FROM review_reports WHERE review_id = ?', (review_id,))
         conn.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        conn.close()
 
 
 @app.route('/api/reviews/<int:review_id>/report', methods=['POST'])
 @login_required
 def report_review(review_id):
-    conn = sqlite3.connect(DB_FILE)
-    try:
+    with get_db() as conn:
         c = conn.cursor()
         c.execute('SELECT user_id FROM course_reviews WHERE id = ?', (review_id,))
         review = c.fetchone()
@@ -602,20 +589,16 @@ def report_review(review_id):
         c.execute('UPDATE course_reviews SET is_reported = 1 WHERE id = ?', (review_id,))
         conn.commit()
         return jsonify({'status': 'ok', 'message': 'レビューを公開一覧から外しました。'})
-    finally:
-        conn.close()
 
 # 成績データを取得するAPI
 @app.route("/api/get_courses", methods=["GET"])
 @login_required
 def get_courses():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    # 修正: 現在ログインしているユーザーのデータのみを取得
-    c.execute("SELECT * FROM grades WHERE user_id = ?", (current_user.id,))
-    rows = c.fetchall()
-    conn.close()
+    with get_db() as conn:
+        c = conn.cursor()
+        # 修正: 現在ログインしているユーザーのデータのみを取得
+        c.execute("SELECT * FROM grades WHERE user_id = ?", (current_user.id,))
+        rows = c.fetchall()
     courses = [dict(row) for row in rows]
     return jsonify(courses)
 
@@ -624,34 +607,32 @@ def get_courses():
 @login_required
 def add_course():
     data = request.get_json()
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO grades (year, semester, name, credits, grade, category, memo, user_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data.get("year"),
-        data.get("semester"),
-        data.get("name"),
-        float(data.get("credits", 0)),
-        data.get("grade"),
-        data.get("category", "未分類"),
-        data.get("memo", ""),
-        current_user.id
-    ))
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO grades (year, semester, name, credits, grade, category, memo, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data.get("year"),
+            data.get("semester"),
+            data.get("name"),
+            float(data.get("credits", 0)),
+            data.get("grade"),
+            data.get("category", "未分類"),
+            data.get("memo", ""),
+            current_user.id
+        ))
+        conn.commit()
     return jsonify({"status": "ok"})
 
 @app.route('/api/delete_course', methods=['POST'])
 @login_required
 def delete_course():
     index = request.json.get("index")
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("DELETE FROM grades WHERE id = ? AND user_id = ?", (index, current_user.id))
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute("DELETE FROM grades WHERE id = ? AND user_id = ?", (index, current_user.id))
+        conn.commit()
     return jsonify({'status': 'deleted'})
 
 @app.route('/api/update_course', methods=['POST'])
@@ -661,29 +642,28 @@ def update_course():
         req = request.get_json()
         index = req.get("index")
         course = req.get("course")
-        
+
         if not index or not course:
             return jsonify({'status': 'error', 'message': 'Missing required parameters'}), 400
 
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
-        c.execute("""
-            UPDATE grades
-            SET year = ?, semester = ?, name = ?, credits = ?, grade = ?, category = ?, memo = ?
-            WHERE id = ? AND user_id = ?
-        """, (
-            course.get("year"),
-            course.get("semester"),
-            course.get("name"),
-            float(course.get("credits", 0)),
-            course.get("grade"),
-            course.get("category", "未分類"),
-            course.get("memo", ""),
-            index,
-            current_user.id
-        ))
-        conn.commit()
-        conn.close()
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute("""
+                UPDATE grades
+                SET year = ?, semester = ?, name = ?, credits = ?, grade = ?, category = ?, memo = ?
+                WHERE id = ? AND user_id = ?
+            """, (
+                course.get("year"),
+                course.get("semester"),
+                course.get("name"),
+                float(course.get("credits", 0)),
+                course.get("grade"),
+                course.get("category", "未分類"),
+                course.get("memo", ""),
+                index,
+                current_user.id
+            ))
+            conn.commit()
         return jsonify({'status': 'updated'})
     except Exception as e:
         app.logger.error(f"Error updating course: {str(e)}")
@@ -693,37 +673,35 @@ def update_course():
 @login_required
 def add_courses_bulk():
     courses_data = request.get_json()
-    
+
     if not courses_data or not isinstance(courses_data, list):
         return jsonify({"status": "error", "message": "無効なデータ形式です"}), 400
-    
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    
-    try:
-        for course in courses_data:
-            c.execute("""
-                INSERT INTO grades (year, semester, name, credits, grade, category, memo, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                course.get("year"),
-                course.get("semester"),
-                course.get("name"),
-                float(course.get("credits", 0)),
-                course.get("grade", ""),
-                course.get("category", "未分類"),
-                course.get("memo", ""),
-                current_user.id
-            ))
-        
-        conn.commit()
-        conn.close()
-        return jsonify({"status": "ok", "count": len(courses_data)})
-    
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        return jsonify({"status": "error", "message": str(e)}), 500
+
+    with get_db() as conn:
+        c = conn.cursor()
+
+        try:
+            for course in courses_data:
+                c.execute("""
+                    INSERT INTO grades (year, semester, name, credits, grade, category, memo, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    course.get("year"),
+                    course.get("semester"),
+                    course.get("name"),
+                    float(course.get("credits", 0)),
+                    course.get("grade", ""),
+                    course.get("category", "未分類"),
+                    course.get("memo", ""),
+                    current_user.id
+                ))
+
+            conn.commit()
+            return jsonify({"status": "ok", "count": len(courses_data)})
+
+        except Exception as e:
+            conn.rollback()
+            return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/api/delete_courses_bulk', methods=['POST'])
@@ -733,34 +711,32 @@ def delete_courses_bulk():
     複数の科目を一括削除するエンドポイント
     """
     ids = request.get_json().get('ids', [])
-    
+
     if not ids or not isinstance(ids, list):
         return jsonify({"status": "error", "message": "無効なデータ形式です"}), 400
-    
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    
-    try:
-        # IDのリストを使用して、対象の科目を削除（ユーザーIDでもフィルタリング）
-        placeholders = ', '.join(['?'] * len(ids))
-        query = f"DELETE FROM grades WHERE id IN ({placeholders}) AND user_id = ?"
-        params = ids + [current_user.id]
-        c.execute(query, params)
-        
-        deleted_count = c.rowcount
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            "status": "ok", 
-            "message": f"{deleted_count}件の科目を削除しました",
-            "count": deleted_count
-        })
-    
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        return jsonify({"status": "error", "message": str(e)}), 500
+
+    with get_db() as conn:
+        c = conn.cursor()
+
+        try:
+            # IDのリストを使用して、対象の科目を削除（ユーザーIDでもフィルタリング）
+            placeholders = ', '.join(['?'] * len(ids))
+            query = f"DELETE FROM grades WHERE id IN ({placeholders}) AND user_id = ?"
+            params = ids + [current_user.id]
+            c.execute(query, params)
+
+            deleted_count = c.rowcount
+            conn.commit()
+
+            return jsonify({
+                "status": "ok", 
+                "message": f"{deleted_count}件の科目を削除しました",
+                "count": deleted_count
+            })
+
+        except Exception as e:
+            conn.rollback()
+            return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/api/parse_campus_html', methods=['POST'])
@@ -771,78 +747,78 @@ def parse_campus_html():
     """
     data = request.get_json()
     html_content = data.get('html', '')
-    
+
     if not html_content:
         return jsonify({"status": "error", "message": "HTMLデータが提供されていません"}), 400
-    
+
     try:
         # BeautifulSoupで解析
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # CAMPUSウェブの成績テーブルを探す（様々なクラス名に対応）
         grades_table = soup.find('table', class_='result_title')
-        
+
         if not grades_table:
             # テーブルが見つからない場合、別の方法で探す
             grades_table = soup.find('table', class_='campusTable')
-            
+
         if not grades_table:
             # さらに別の方法で探す
             grades_table = soup.find('table', {'id': lambda x: x and 'tbl_' in x})
-        
+
         if not grades_table:
             return jsonify({"status": "error", "message": "成績テーブルが見つかりませんでした。正しいCAMPUSウェブの成績表のHTMLを貼り付けてください。"}), 400
-        
+
         rows = grades_table.find_all('tr')
-        
+
         # ヘッダー行をスキップして科目情報を抽出
         courses = []
-        
+
         # 最初の行はヘッダーなのでスキップ
         for row in rows[1:]:
             cells = row.find_all('td', class_='list_cell_center')
-            
+
             # クラスがない場合は一般的なtdタグも検索
             if not cells:
                 cells = row.find_all('td')
-            
+
             # 有効な行のみを処理（列数をチェック）
             if len(cells) >= 5:
                 try:
                     # 区分（カテゴリ）- 立命館CAMPUSウェブでは0番目
                     category = cells[0].get_text(strip=True) if len(cells) > 0 else "未分類"
-                    
+
                     # 科目名（コード番号を除去）- 立命館CAMPUSウェブでは1番目
                     name_full = cells[1].get_text(strip=True) if len(cells) > 1 else ""
                     # 科目コードを除去（例：「53012 生物科学１ *」→「生物科学１ *」）
                     name = name_full.split(' ', 1)[-1] if ' ' in name_full else name_full
                     name = name.replace(' *', '')  # 遠隔授業マーク(*) を除去
-                    
+
                     # 単位数 - 立命館CAMPUSウェブでは4番目
                     credits_text = cells[4].get_text(strip=True) if len(cells) > 4 else "0"
                     credits = float(credits_text) if credits_text and credits_text.replace('.', '', 1).isdigit() else 0
-                    
+
                     # 成績評価 - 立命館CAMPUSウェブでは5番目
                     grade = cells[5].get_text(strip=True) if len(cells) > 5 else ""
-                    
+
                     # 修得年度 - 立命館CAMPUSウェブでは6番目
                     year_text = cells[6].get_text(strip=True) if len(cells) > 6 else ""
                     year = int(year_text) if year_text and year_text.isdigit() else None
-                    
+
                     # 学期（授業開講期間）- 立命館CAMPUSウェブでは7番目
                     semester_text = cells[7].get_text(strip=True) if len(cells) > 7 else ""
                     semester = map_campus_semester(semester_text)
-                    
+
                     # カテゴリのマッピング
                     mapped_category = map_campus_category_to_app_category(category)
-                    
+
                     # 科目名による自動分類も試行（共通専門科目の場合は優先）
                     name_based_category = classify_subject_by_name(name)
                     if name_based_category == '共通専門科目':
                         mapped_category = name_based_category
                     elif mapped_category == '未分類' and name_based_category != '未分類':
                         mapped_category = name_based_category
-                    
+
                     # 科目名と単位数があれば追加
                     if name and credits > 0:
                         course = {
@@ -855,20 +831,20 @@ def parse_campus_html():
                             "memo": f"CAMPUSウェブから自動インポート: 元区分「{category}」"
                         }
                         courses.append(course)
-                        
+
                 except Exception as e:
                     # エラーがあっても続行
                     pass
-        
+
         if not courses:
             return jsonify({"status": "warning", "message": "有効な科目データが見つかりませんでした。HTMLが正しいか確認してください。"}), 200
-        
+
         return jsonify({
             "status": "success",
             "message": f"{len(courses)}件の科目データが見つかりました。",
             "courses": courses
         })
-        
+
     except Exception as e:
         return jsonify({"status": "error", "message": f"HTMLの解析中にエラーが発生しました: {str(e)}"}), 500
 
@@ -879,7 +855,7 @@ def map_campus_category_to_app_category(campus_category):
     """
     # 小文字にして空白を削除してマッチングしやすくする
     category_lower = campus_category.lower().replace(' ', '')
-    
+
     # カテゴリマッピング（必要に応じて追加・調整）
     if any(keyword in category_lower for keyword in ['専門', '必修', '選択']):
         if '基礎' in category_lower:
@@ -942,7 +918,7 @@ class RegistrationForm(FlaskForm):
     ])
     current_year = IntegerField('学年', validators=[DataRequired(), NumberRange(min=1, max=6, message='1〜6の間で入力してください')])
     submit = SubmitField('登録')
-    
+
     def validate_user_id(self, user_id):
         user = User.get_by_user_id(user_id.data)
         if user:
@@ -959,11 +935,11 @@ class ProfileForm(FlaskForm):
         NumberRange(min=1, max=300, message='1〜300の範囲で入力してください'),
     ])
     submit = SubmitField('更新')
-    
+
     def __init__(self, original_user_id=None, *args, **kwargs):
         super(ProfileForm, self).__init__(*args, **kwargs)
         self.original_user_id = original_user_id
-    
+
     def validate_user_id(self, user_id):
         # 現在のユーザーIDと同じ場合はチェックをスキップ
         if user_id.data != self.original_user_id:
@@ -988,7 +964,7 @@ class DeleteAccountForm(FlaskForm):
     password = PasswordField('パスワード', validators=[DataRequired()])
     confirm_text = StringField('確認テキスト', validators=[DataRequired()])
     submit = SubmitField('アカウントを削除')
-    
+
     def validate_confirm_text(self, confirm_text):
         if confirm_text.data != 'アカウント削除':
             raise ValidationError('確認テキストが正しくありません。「アカウント削除」と入力してください。')
@@ -1005,87 +981,48 @@ class User(UserMixin):
         self.current_year = current_year
         self.required_credits = required_credits
         self.settings = json.loads(settings_json) if settings_json else {}
-        
+
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-    
+
+    # 古いDBでは後から追加した列がないことがあるため、存在しなければNoneにする
+    OPTIONAL_COLUMNS = ('email', 'user_id', 'nickname')
+
     @staticmethod
-    def get_by_email(email):
-        conn = sqlite3.connect(DB_FILE)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE email = ?", (email,))
-        user_data = c.fetchone()
-        conn.close()
-        
-        if user_data:
-            try:
-                return User(
-                    id=user_data['id'],
-                    email=user_data['email'],
-                    name=user_data['name'],
-                    user_id=user_data['user_id'] if 'user_id' in user_data.keys() else None,
-                    nickname=user_data['nickname'] if 'nickname' in user_data.keys() else None,
-                    password_hash=user_data['password_hash'],
-                    current_year=user_data['current_year'],
-                    required_credits=user_data['required_credits'],
-                    settings_json=user_data['settings_json']
-                )
-            except Exception as e:
-                return None
-        return None
-    
+    def _find_one(column, value):
+        """usersテーブルから1件取得してUserにする。見つからなければNone。"""
+        if column not in ('id', 'user_id'):
+            raise ValueError(f'検索に使えない列です: {column}')
+
+        with get_db() as conn:
+            row = conn.execute(f'SELECT * FROM users WHERE {column} = ?', (value,)).fetchone()
+        if row is None:
+            return None
+
+        optional = {
+            key: row[key] if key in row.keys() else None
+            for key in User.OPTIONAL_COLUMNS
+        }
+        try:
+            return User(
+                id=row['id'],
+                name=row['name'],
+                password_hash=row['password_hash'],
+                current_year=row['current_year'],
+                required_credits=row['required_credits'],
+                settings_json=row['settings_json'],
+                **optional,
+            )
+        except Exception:
+            return None
+
     @staticmethod
     def get_by_user_id(user_id):
-        conn = sqlite3.connect(DB_FILE)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
-        user_data = c.fetchone()
-        conn.close()
-        
-        if user_data:
-            try:
-                return User(
-                    id=user_data['id'],
-                    email=user_data['email'] if 'email' in user_data.keys() else None,
-                    name=user_data['name'],
-                    user_id=user_data['user_id'] if 'user_id' in user_data.keys() else None,
-                    nickname=user_data['nickname'] if 'nickname' in user_data.keys() else None,
-                    password_hash=user_data['password_hash'],
-                    current_year=user_data['current_year'],
-                    required_credits=user_data['required_credits'],
-                    settings_json=user_data['settings_json']
-                )
-            except Exception as e:
-                return None
-        return None
-    
+        return User._find_one('user_id', user_id)
+
     @staticmethod
     def get_by_id(user_id):
-        conn = sqlite3.connect(DB_FILE)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        user_data = c.fetchone()
-        conn.close()
-        
-        if user_data:
-            try:
-                return User(
-                    id=user_data['id'],
-                    email=user_data['email'] if 'email' in user_data.keys() else None,
-                    name=user_data['name'],
-                    user_id=user_data['user_id'] if 'user_id' in user_data.keys() else None,
-                    nickname=user_data['nickname'] if 'nickname' in user_data.keys() else None,
-                    password_hash=user_data['password_hash'],
-                    current_year=user_data['current_year'],
-                    required_credits=user_data['required_credits'],
-                    settings_json=user_data['settings_json']
-                )
-            except Exception as e:
-                return None
-        return None
+        return User._find_one('id', user_id)
 
 # Flask-Loginのユーザーローダー
 @login_manager.user_loader
@@ -1097,7 +1034,7 @@ def load_user(user_id):
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('home'))
-    
+
     form = LoginForm()
     if form.validate_on_submit():
         user = User.get_by_user_id(form.user_id.data)
@@ -1106,36 +1043,35 @@ def login():
             next_page = request.args.get('next')
             return redirect(next_page if next_page else url_for('home'))
         flash('ユーザーIDまたはパスワードが正しくありません', 'error')
-    
+
     return render_template('login.html', form=form, title='ログイン')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('home'))
-    
+
     form = RegistrationForm()
     if form.validate_on_submit():
         try:
             password_hash = generate_password_hash(form.password.data)
-            
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            c.execute('''
-                INSERT INTO users (email, name, password_hash, current_year, user_id, nickname)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', ('', form.nickname.data, password_hash, form.current_year.data, form.user_id.data, form.nickname.data))
-            conn.commit()
-            user_id = c.lastrowid
-            conn.close()
-            
+
+            with get_db() as conn:
+                c = conn.cursor()
+                c.execute('''
+                    INSERT INTO users (email, name, password_hash, current_year, user_id, nickname)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', ('', form.nickname.data, password_hash, form.current_year.data, form.user_id.data, form.nickname.data))
+                conn.commit()
+                user_id = c.lastrowid
+
             user = User.get_by_id(user_id)
             login_user(user)
             flash('アカウント登録が完了しました！ホーム画面から、1科目の手動追加・複数科目の一括追加・サンプルデータでの確認を始められます。対応形式の成績HTMLも取り込めます。', 'success')
             return redirect(url_for('home'))
         except Exception as e:
             flash(f'登録中にエラーが発生しました: {str(e)}', 'error')
-    
+
     return render_template('register.html', form=form, title='新規登録')
 
 @app.route('/logout')
@@ -1156,107 +1092,104 @@ def profile():
         profile_form.email.data = current_user.email or ''
         profile_form.grade.data = current_user.current_year
         profile_form.required_credits.data = current_user.required_credits or 124.0
-    
+
     # パスワード変更フォームの初期化
     password_form = ChangePasswordForm()
-    
+
     # アカウント削除フォームの初期化
     delete_form = DeleteAccountForm()
-    
+
     # プロフィール更新のフォーム処理
     if 'update_profile' in request.form and profile_form.validate_on_submit():
         try:
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            c.execute('''
-                UPDATE users
-                SET user_id = ?, nickname = ?, email = ?, current_year = ?, required_credits = ?
-                WHERE id = ?
-            ''', (
-                profile_form.user_id.data,
-                profile_form.nickname.data,
-                profile_form.email.data,
-                profile_form.grade.data,
-                profile_form.required_credits.data,
-                current_user.id
-            ))
-            conn.commit()
-            conn.close()
-            
+            with get_db() as conn:
+                c = conn.cursor()
+                c.execute('''
+                    UPDATE users
+                    SET user_id = ?, nickname = ?, email = ?, current_year = ?, required_credits = ?
+                    WHERE id = ?
+                ''', (
+                    profile_form.user_id.data,
+                    profile_form.nickname.data,
+                    profile_form.email.data,
+                    profile_form.grade.data,
+                    profile_form.required_credits.data,
+                    current_user.id
+                ))
+                conn.commit()
+
             # セッション内のユーザー情報を更新
             current_user.user_id = profile_form.user_id.data
             current_user.nickname = profile_form.nickname.data
             current_user.email = profile_form.email.data
             current_user.current_year = profile_form.grade.data
             current_user.required_credits = profile_form.required_credits.data
-            
+
             flash('プロフィールが更新されました', 'success')
             return redirect(url_for('profile'))
         except Exception as e:
             flash(f'プロフィール更新中にエラーが発生しました: {str(e)}', 'error')
-    
+
     # パスワード変更のフォーム処理
     if 'change_password' in request.form and password_form.validate_on_submit():
         # 現在のパスワード確認
         if not current_user.check_password(password_form.current_password.data):
             flash('現在のパスワードが正しくありません', 'error')
             return redirect(url_for('profile'))
-            
+
         try:
             # 新しいパスワードのハッシュ化
             password_hash = generate_password_hash(password_form.new_password.data)
-            
+
             # データベース更新
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            c.execute('''
-                UPDATE users
-                SET password_hash = ?
-                WHERE id = ?
-            ''', (password_hash, current_user.id))
-            conn.commit()
-            conn.close()
-            
+            with get_db() as conn:
+                c = conn.cursor()
+                c.execute('''
+                    UPDATE users
+                    SET password_hash = ?
+                    WHERE id = ?
+                ''', (password_hash, current_user.id))
+                conn.commit()
+
             # ユーザーモデル更新
             current_user.password_hash = password_hash
-            
+
             flash('パスワードが正常に変更されました', 'success')
             return redirect(url_for('profile'))
         except Exception as e:
             flash(f'パスワード変更中にエラーが発生しました: {str(e)}', 'error')
-    
+
     # アカウント削除のフォーム処理
     if 'delete_account' in request.form and delete_form.validate_on_submit():
         # 現在のパスワード確認
         if not current_user.check_password(delete_form.password.data):
             flash('パスワードが正しくありません', 'error')
             return redirect(url_for('profile'))
-            
+
         try:
             user_id = current_user.id
-            
+
             # データベース接続
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            
-            # ユーザーの成績データを削除
-            c.execute('DELETE FROM grades WHERE user_id = ?', (user_id,))
-            
-            # ユーザーアカウントを削除
-            c.execute('DELETE FROM users WHERE id = ?', (user_id,))
-            
-            conn.commit()
-            conn.close()
-            
+            with get_db() as conn:
+                c = conn.cursor()
+
+                # ユーザーの成績データを削除
+                c.execute('DELETE FROM grades WHERE user_id = ?', (user_id,))
+
+                # ユーザーアカウントを削除
+                c.execute('DELETE FROM users WHERE id = ?', (user_id,))
+
+                conn.commit()
+
             # ログアウト処理
             logout_user()
-            
+
             flash('アカウントが正常に削除されました。ご利用ありがとうございました。', 'info')
             return redirect(url_for('login'))
-            
+
         except Exception as e:
             flash(f'アカウント削除中にエラーが発生しました: {str(e)}', 'error')
-    
+
     return render_template('profile.html', 
                          profile_form=profile_form, 
                          password_form=password_form,
@@ -1265,61 +1198,55 @@ def profile():
 # GPA/GPS計算とランキング関連の関数
 def calculate_gpa_gps(user_id):
     """指定されたユーザーのGPAとGPSを計算する"""
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    try:
+    with get_db() as conn:
+        c = conn.cursor()
         # 該当ユーザーの成績データを取得
         c.execute(
             'SELECT grade, credits, year FROM grades WHERE user_id = ? AND grade IS NOT NULL AND grade != ""',
             (user_id,)
         )
         grades = c.fetchall()
-        
-        if not grades:
-            return 0.0, 0.0, 0  # GPA, GPS, 総単位数
-        
-        # 成績のポイント換算表（ホームページと統一）
-        grade_points = {
-            'A+': 5.0, 'A': 4.0, 'B': 3.0, 'C': 2.0, 'F': 0.0
-        }
-        
-        total_credits = 0  # GPA計算用の総単位数（F評価含む）
-        total_grade_points = 0.0
-        earned_credits = 0  # 修得単位数（F/年度不明を除外）
-        
-        for grade_row in grades:
-            grade = grade_row['grade']
-            credits = grade_row['credits']
-            year = grade_row['year']
-            
-            if grade in grade_points and credits > 0:
-                point = grade_points[grade]
-                # GPA計算にはF評価も含める（分母に含める）
-                total_credits += credits
-                total_grade_points += point * credits
-                
-                # 取得単位数にはF評価と年度不明を含めない
-                if grade != 'F' and year is not None and year != '':
-                    earned_credits += credits
-        
-        if total_credits == 0:
-            return 0.0, 0.0, 0
-        
-        gpa = total_grade_points / total_credits
-        gps = total_grade_points
-        
-        return round(gpa, 2), round(gps, 2), earned_credits
-        
-    finally:
-        conn.close()
+
+    if not grades:
+        return 0.0, 0.0, 0  # GPA, GPS, 総単位数
+
+    # 成績のポイント換算表（ホームページと統一）
+    grade_points = {
+        'A+': 5.0, 'A': 4.0, 'B': 3.0, 'C': 2.0, 'F': 0.0
+    }
+
+    total_credits = 0  # GPA計算用の総単位数（F評価含む）
+    total_grade_points = 0.0
+    earned_credits = 0  # 修得単位数（F/年度不明を除外）
+
+    for grade_row in grades:
+        grade = grade_row['grade']
+        credits = grade_row['credits']
+        year = grade_row['year']
+
+        if grade in grade_points and credits > 0:
+            point = grade_points[grade]
+            # GPA計算にはF評価も含める（分母に含める）
+            total_credits += credits
+            total_grade_points += point * credits
+
+            # 取得単位数にはF評価と年度不明を含めない
+            if grade != 'F' and year is not None and year != '':
+                earned_credits += credits
+
+    if total_credits == 0:
+        return 0.0, 0.0, 0
+
+    gpa = total_grade_points / total_credits
+    gps = total_grade_points
+
+    return round(gpa, 2), round(gps, 2), earned_credits
+
 
 def get_user_statistics(user_id):
     """ユーザーの詳細統計情報を取得"""
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    try:
+    with get_db() as conn:
+        c = conn.cursor()
         # 年度別GPAも単位数で加重し、取得単位からF評価を除外する。
         c.execute('''
             SELECT year, COUNT(*) as courses,
@@ -1338,7 +1265,7 @@ def get_user_statistics(user_id):
             ORDER BY year
         ''', (user_id,))
         yearly_stats = c.fetchall()
-        
+
         # 成績分布
         c.execute('''
             SELECT grade, COUNT(*) as count
@@ -1347,7 +1274,7 @@ def get_user_statistics(user_id):
             GROUP BY grade
         ''', (user_id,))
         grade_distribution = c.fetchall()
-        
+
         # カテゴリ別統計（未修得単位と年度不明を除外）
         c.execute('''
             SELECT category, COUNT(*) as courses, 
@@ -1358,15 +1285,13 @@ def get_user_statistics(user_id):
             GROUP BY category
         ''', (user_id,))
         category_stats = c.fetchall()
-        
+
         return {
             'yearly_stats': [dict(row) for row in yearly_stats],
             'grade_distribution': [dict(row) for row in grade_distribution],
             'category_stats': [dict(row) for row in category_stats]
         }
-        
-    finally:
-        conn.close()
+
 
 # ランキング機能のAPIエンドポイント
 @app.route('/api/get_ranking', methods=['GET'])
@@ -1379,25 +1304,23 @@ def get_ranking():
     try:
         sort_by = request.args.get('sort_by', 'gpa')  # gpa, gps, credits
         grade_filter = request.args.get('grade', 'all')  # 学年フィルタ
-        
-        conn = sqlite3.connect(DB_FILE)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        
-        # 学年フィルタに応じてクエリを変更
-        if grade_filter == 'all':
-            c.execute('SELECT id, nickname, current_year FROM users WHERE nickname IS NOT NULL')
-        else:
-            c.execute('SELECT id, nickname, current_year FROM users WHERE nickname IS NOT NULL AND current_year = ?', (int(grade_filter),))
-        
-        users = c.fetchall()
-        conn.close()
-        
+
+        with get_db() as conn:
+            c = conn.cursor()
+
+            # 学年フィルタに応じてクエリを変更
+            if grade_filter == 'all':
+                c.execute('SELECT id, nickname, current_year FROM users WHERE nickname IS NOT NULL')
+            else:
+                c.execute('SELECT id, nickname, current_year FROM users WHERE nickname IS NOT NULL AND current_year = ?', (int(grade_filter),))
+
+            users = c.fetchall()
+
         ranking_data = []
-        
+
         for user in users:
             gpa, gps, total_credits = calculate_gpa_gps(user['id'])
-            
+
             # 最低限のデータがある場合のみランキングに含める
             if total_credits > 0:
                 ranking_data.append({
@@ -1409,7 +1332,7 @@ def get_ranking():
                     'total_credits': total_credits,
                     'is_current_user': user['id'] == current_user.id
                 })
-        
+
         # ソート
         if sort_by == 'gpa':
             ranking_data.sort(key=lambda x: x['gpa'], reverse=True)
@@ -1417,18 +1340,18 @@ def get_ranking():
             ranking_data.sort(key=lambda x: x['gps'], reverse=True)
         elif sort_by == 'credits':
             ranking_data.sort(key=lambda x: x['total_credits'], reverse=True)
-        
+
         # ランク付け
         for i, user_data in enumerate(ranking_data):
             user_data['rank'] = i + 1
-        
+
         return jsonify({
             'status': 'success',
             'data': ranking_data,
             'sort_by': sort_by,
             'grade_filter': grade_filter
         })
-        
+
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
@@ -1442,7 +1365,7 @@ def get_my_stats():
     try:
         gpa, gps, total_credits = calculate_gpa_gps(current_user.id)
         stats = get_user_statistics(current_user.id)
-        
+
         return jsonify({
             'status': 'success',
             'data': {
@@ -1452,7 +1375,7 @@ def get_my_stats():
                 'stats': stats
             }
         })
-        
+
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
@@ -1465,38 +1388,36 @@ def get_distribution_stats():
 
     try:
         grade_filter = request.args.get('grade', 'all')  # 学年フィルタ
-        
-        conn = sqlite3.connect(DB_FILE)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        
-        # 学年フィルタに応じてユーザーを取得
-        if grade_filter == 'all':
-            c.execute('SELECT id FROM users WHERE nickname IS NOT NULL')
-        else:
-            c.execute('SELECT id FROM users WHERE nickname IS NOT NULL AND current_year = ?', (int(grade_filter),))
-        
-        users = c.fetchall()
-        conn.close()
-        
+
+        with get_db() as conn:
+            c = conn.cursor()
+
+            # 学年フィルタに応じてユーザーを取得
+            if grade_filter == 'all':
+                c.execute('SELECT id FROM users WHERE nickname IS NOT NULL')
+            else:
+                c.execute('SELECT id FROM users WHERE nickname IS NOT NULL AND current_year = ?', (int(grade_filter),))
+
+            users = c.fetchall()
+
         gpa_values = []
         gps_values = []
-        
+
         # 各ユーザーのGPA・GPSを計算
         for user in users:
             gpa, gps, total_credits = calculate_gpa_gps(user['id'])
-            
+
             # 最低限のデータがある場合のみ統計に含める
             if total_credits > 0:
                 gpa_values.append(gpa)
                 gps_values.append(gps)
-        
+
         # GPA分布を計算
         gpa_distribution = calculate_distribution(gpa_values, 'gpa')
-        
+
         # GPS分布を計算
         gps_distribution = calculate_distribution(gps_values, 'gps')
-        
+
         return jsonify({
             'status': 'success',
             'data': {
@@ -1506,7 +1427,7 @@ def get_distribution_stats():
                 'grade_filter': grade_filter
             }
         })
-        
+
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
@@ -1514,7 +1435,7 @@ def calculate_distribution(values, metric_type):
     """数値リストから分布データを計算する"""
     if not values:
         return []
-    
+
     # 区間を定義
     if metric_type == 'gpa':
         # GPA用の区間（0.5刻み）
@@ -1534,22 +1455,22 @@ def calculate_distribution(values, metric_type):
         # GPS用の区間（0から適切な上限まで50刻み）
         if not values:
             return []
-            
+
         min_val = min(values)
         max_val = max(values)
-        
+
         # 50ポイント刻みで区間を作成（0から開始）
         step = 50
         start = 0  # 常に0から開始
         end = int(max_val // step + 1) * step
-        
+
         ranges = []
         current = start
         while current < end:
             next_val = current + step
             ranges.append((current, next_val, f"{current}-{next_val}"))
             current = next_val
-    
+
     # 各区間のカウントを計算
     distribution = []
     for min_val, max_val, label in ranges:
@@ -1561,7 +1482,7 @@ def calculate_distribution(values, metric_type):
             'min_value': min_val,
             'max_value': max_val
         })
-    
+
     return distribution
 
 @app.route('/ranking')
@@ -1581,34 +1502,32 @@ def get_available_grades():
         return jsonify({'status': 'error', 'message': 'ランキング機能は現在無効です。'}), 404
 
     try:
-        conn = sqlite3.connect(DB_FILE)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        
-        # データが存在するユーザーの学年を取得
-        c.execute('''
-            SELECT DISTINCT u.current_year 
-            FROM users u 
-            WHERE u.nickname IS NOT NULL 
-            AND u.current_year IS NOT NULL 
-            AND EXISTS (
-                SELECT 1 FROM grades g 
-                WHERE g.user_id = u.id 
-                AND g.grade IS NOT NULL 
-                AND g.grade != ''
-            )
-            ORDER BY u.current_year
-        ''')
-        grades = c.fetchall()
-        conn.close()
-        
+        with get_db() as conn:
+            c = conn.cursor()
+
+            # データが存在するユーザーの学年を取得
+            c.execute('''
+                SELECT DISTINCT u.current_year 
+                FROM users u 
+                WHERE u.nickname IS NOT NULL 
+                AND u.current_year IS NOT NULL 
+                AND EXISTS (
+                    SELECT 1 FROM grades g 
+                    WHERE g.user_id = u.id 
+                    AND g.grade IS NOT NULL 
+                    AND g.grade != ''
+                )
+                ORDER BY u.current_year
+            ''')
+            grades = c.fetchall()
+
         available_grades = [row['current_year'] for row in grades if row['current_year'] is not None]
-        
+
         return jsonify({
             'status': 'success',
             'data': available_grades
         })
-        
+
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
