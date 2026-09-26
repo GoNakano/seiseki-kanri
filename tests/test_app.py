@@ -9,7 +9,7 @@ os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["SKIP_DB_INIT"] = "1"
 os.environ["DATABASE_PATH"] = os.path.join(TEST_DIR.name, "test.db")
 
-from app import DB_FILE, app, calculate_gpa_gps, get_user_statistics, initialize_database
+from app import DB_FILE, app, calculate_gpa_gps, get_db, get_user_statistics, initialize_database
 
 app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
 initialize_database()
@@ -49,6 +49,32 @@ class AppSmokeTest(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="subject-categories-data"', response.data)
+
+    def test_db_connection_is_closed_even_after_error(self):
+        with self.assertRaises(RuntimeError):
+            with get_db() as conn:
+                raise RuntimeError("途中でエラー")
+        with self.assertRaises(sqlite3.ProgrammingError):
+            conn.execute("SELECT 1")
+
+    def test_registered_user_can_log_in_again(self):
+        self.register_user("loginuser", "Login User")
+        self.client.get("/logout")
+
+        response = self.client.post(
+            "/login",
+            data={"user_id": "loginuser", "password": "password123"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.get("/api/get_courses").status_code, 200)
+
+        self.client.get("/logout")
+        response = self.client.post(
+            "/login",
+            data={"user_id": "loginuser", "password": "wrong-password"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get("/api/get_courses").status_code, 302)
 
     def test_health_check_is_public(self):
         response = self.client.get("/healthz")
