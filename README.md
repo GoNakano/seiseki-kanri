@@ -1,5 +1,7 @@
 # seiseki-kanri
 
+[![CI](https://github.com/GoNakano/seiseki-kanri-public/actions/workflows/ci.yml/badge.svg)](https://github.com/GoNakano/seiseki-kanri-public/actions/workflows/ci.yml)
+
 大学の成績を登録して、GPA/GPSや取得単位を確認するFlaskアプリです。
 
 成績表を手入力するだけでなく、大学ポータルからコピーしたHTMLを貼り付けて科目を取り込めるようにしています。登録したデータはユーザーごとに分けてSQLiteへ保存します。
@@ -58,6 +60,20 @@ Python側の集計とブラウザ側の表示で同じ5段階のルールを使�
 ### 公開を前提にした設定
 
 `.env`、SQLiteのDB、ログはGit管理に含めない設定です。ランキングと初期管理者は環境変数で無効にできます。
+
+### 自動テスト
+
+`tests/test_app.py` で、ダミーデータを使って次の点を確認しています。GitHub Actionsでpushのたびに実行します。
+
+- 他のユーザーの科目が一覧に出ないこと、CSV出力が自分の科目だけになること
+- GPAと取得単位の計算（F評価の扱いを含む）
+- 成績表HTMLの解析と、想定外のHTMLを拒否すること
+- 講義レビューの匿名表示と、非公開レビューが一覧に出ないこと
+- デモデータの登録がログイン必須で、重複しないこと
+
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
 
 ---
 

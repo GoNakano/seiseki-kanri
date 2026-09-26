@@ -53,6 +53,8 @@ Thumbs.db
 test_*.html
 test_*.js
 test_*.py
+!tests/
+!tests/test_*.py
 
 # クッキーファイル
 cookies.txt
