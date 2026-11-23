@@ -8,6 +8,8 @@
 
 大学公式のサービスではありません。成績情報を扱うため、基本的にはローカルで使う前提です。
 
+大学3年次の授業課題として、生成AIにコードを書かせて作りました。2026年9月のコード整理（ファイル分割・DB接続の共通化など）と自動テストの追加もClaude Codeで行っています。
+
 デモ：https://seiseki-kanri.onrender.com （初回表示に時間がかかる場合があります。ダミーアカウントとサンプルデータで確認してください）
 
 ## できること
@@ -106,7 +108,7 @@ python -m unittest discover -s tests -p "test_*.py"
 - Git / GitHub
 - GitHub Actions（push・プルリクエストのたびに全Pythonファイルのコンパイル確認と自動テスト）
 - Dependabot（依存ライブラリの更新通知）
-- Claude Code、Codex（開発ツール）
+- 生成AI（コードの作成）、Claude Code（コード整理・自動テストの追加）
 
 ### 起動・運用
 
